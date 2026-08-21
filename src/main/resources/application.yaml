@@ -1,3 +1,31 @@
 spring:
   application:
     name: springquant
+
+trading:
+  exchange:
+    api-key: ${BITGET_API_KEY}
+    secret-key: ${BITGET_API_SECRET}
+    passphrase: ${BITGET_API_PASSPHRASE}
+
+  execution:
+    symbol: ${SYMBOL}
+    leverage: ${LEVERAGE}
+    margin-usage: ${MARGIN_USAGE}
+    balance-buffer: ${BALANCE_BUFFER}
+
+  strategy:
+    bb-period: ${BB_PERIOD}
+    bb-multiplier: ${BB_STD_MULTIPLIER}
+    supertrend-length: ${ST_LENGTH}
+    supertrend-factor: ${ST_FACTOR}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+  endpoint:
+    health:
+      show-details: never
