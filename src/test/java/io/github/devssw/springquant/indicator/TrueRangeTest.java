@@ -17,7 +17,7 @@ class TrueRangeTest {
             double close
     ) {
         return new Candle(
-                index * 1_000L,
+                index * 1000L,
                 open,
                 high,
                 low,
