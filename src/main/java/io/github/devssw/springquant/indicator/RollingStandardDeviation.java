@@ -6,7 +6,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-// 볼린저밴드 (표준편차 - 상단/하단)
+// 표준편차 계산
 public final class RollingStandardDeviation {
     private RollingStandardDeviation() { }
     public static double[] calculate(List<Candle> candles, int period) {
