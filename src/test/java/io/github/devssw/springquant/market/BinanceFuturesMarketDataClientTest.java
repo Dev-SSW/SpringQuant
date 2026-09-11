@@ -33,11 +33,10 @@ public class BinanceFuturesMarketDataClientTest {
         // 응답 배열을 가정하여 정의
         String responseBody =
                 """
-                [[1000,"100.0","110.0","90.0","105.0","50.0"],[2000,"105.0","120.0","100.0","115.0","60.0"]]
+                [[1000,"100.0","110.0","90.0","105.0","50.0",1999],[2000,"105.0","120.0","100.0","115.0","60.0",2999]]
                 """;
         // 다음 주소로 요청
-        server
-                .expect(once(), requestTo("https://fapi.binance.com"
+        server.expect(once(), requestTo("https://fapi.binance.com"
                                         + "/fapi/v1/klines"
                                         + "?symbol=BTCUSDT"
                                         + "&interval=4h"
