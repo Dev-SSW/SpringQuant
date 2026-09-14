@@ -17,7 +17,7 @@ class BacktestEngineTest {
     }
 
     private BacktestConfig config() {
-        return new BacktestConfig(10000.0, 0.0, 1, 0.1, 2, 2.0, 0.0, 2, 0.1, EntryMode.ST_FLIP, 0.0, 0.0, true);
+        return new BacktestConfig(10000.0, 0.0, 1, 0.1, 2, 2.0, 0.0, 2, 0.1, EntryMode.ST_FLIP, 0.0, 0.0, true, BacktestTestFixtures.riskManagementConfig());
     }
 
     @Test

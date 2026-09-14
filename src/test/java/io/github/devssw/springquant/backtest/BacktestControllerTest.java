@@ -30,7 +30,7 @@ class BacktestControllerTest {
 
     @Test
     void 백테스트실행응답() throws Exception {
-        BacktestConfig expectedConfig = new BacktestConfig(10000.0, 0.0004, 1, 1.0, 10, 1.0, 0.0, 10, 1.0, EntryMode.MA_BOUNCE, 0.0, 0.0, true);
+        BacktestConfig expectedConfig = new BacktestConfig(10000.0, 0.0004, 1, 1.0, 10, 1.0, 0.0, 10, 1.0, EntryMode.MA_BOUNCE, 0.0, 0.0, true, BacktestTestFixtures.riskManagementConfig());
         BacktestResult expectedResult = BacktestResult.from(10000.0, List.of());
 
         when(backtestService.run("BTCUSDT", "4h", 1000L, 10000L, expectedConfig)).thenReturn(expectedResult);
@@ -54,7 +54,26 @@ class BacktestControllerTest {
                   "entryMode": "MA_BOUNCE",
                   "maTolerancePercent": 0.0,
                   "bbTolerancePercent": 0.0,
-                  "oneEntryPerTrend": true
+                  "oneEntryPerTrend": true,
+                          "riskManagement": {
+                            "stopLossPercent": 2.0,
+                            "takeProfitLevels": [
+                              {
+                                "targetPercent": 1.0,
+                                "closeRatio": 0.5
+                              },
+                              {
+                                "targetPercent": 2.0,
+                                "closeRatio": 0.3
+                              },
+                              {
+                                "targetPercent": 3.0,
+                                "closeRatio": 0.2
+                              }
+                            ],
+                            "moveStopToBreakEven": true,
+                            "breakEvenTriggerPercent": 2.0
+                          }
                 }
                 """;
 
@@ -91,7 +110,26 @@ class BacktestControllerTest {
                   "entryMode": "MA_BOUNCE",
                   "maTolerancePercent": 0.0,
                   "bbTolerancePercent": 0.0,
-                  "oneEntryPerTrend": true
+                  "oneEntryPerTrend": true,
+                          "riskManagement": {
+                            "stopLossPercent": 2.0,
+                            "takeProfitLevels": [
+                              {
+                                "targetPercent": 1.0,
+                                "closeRatio": 0.5
+                              },
+                              {
+                                "targetPercent": 2.0,
+                                "closeRatio": 0.3
+                              },
+                              {
+                                "targetPercent": 3.0,
+                                "closeRatio": 0.2
+                              }
+                            ],
+                            "moveStopToBreakEven": true,
+                            "breakEvenTriggerPercent": 2.0
+                          }
                 }
                 """;
 
