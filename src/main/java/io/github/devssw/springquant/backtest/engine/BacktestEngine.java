@@ -1,0 +1,241 @@
+package io.github.devssw.springquant.backtest.engine;
+
+import io.github.devssw.springquant.backtest.model.*;
+import io.github.devssw.springquant.indicator.bollingerband.BollingerBand;
+import io.github.devssw.springquant.indicator.bollingerband.BollingerBandCalculator;
+import io.github.devssw.springquant.indicator.supertrend.SuperTrend;
+import io.github.devssw.springquant.indicator.supertrend.SuperTrendCalculator;
+import io.github.devssw.springquant.market.Candle;
+import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+@Service
+public final class BacktestEngine {
+    // 현재 포지션의 반대 신호인지 확인 (포지션이 롱인데, 신호가 숏이면 True -> 청산됨)
+    private boolean shouldExitBySuperTrend(OpenPosition position, SuperTrend superTrend) {
+        return switch (position.getSide()) {
+            case LONG -> superTrend.signal() == SuperTrend.Signal.SHORT;
+            case SHORT -> superTrend.signal() == SuperTrend.Signal.LONG;
+        };
+    }
+
+    // ST 신호를 포지션 방향으로 변환
+    private PositionSide positionSideFromSignal(SuperTrend.Signal signal) {
+        return switch (signal) {
+            case LONG -> PositionSide.LONG;
+            case SHORT -> PositionSide.SHORT;
+            case NONE -> null;
+        };
+    }
+
+    // 설정해둔 밴드 폭 최소 넓이를 충족하는지 확인
+    private boolean hasSufficientBandWidth(BollingerBand band, BacktestConfig config) {
+        return band.isAvailable() && band.widthPercent() >= config.bollingerWidthMinPercent();
+    }
+
+    // 중심선 반등 조건 확인
+    private PositionSide determineMaBounceSide(Candle candle, BollingerBand band, SuperTrend superTrend, double tolerancePercent) {
+        double tolerance = tolerancePercent / 100.0;
+        // ST 방향이 상승일 때 (ST 선은 아래에 있음) 허용 오차를 통해 반등을 확인
+        if (superTrend.direction() == SuperTrend.Direction.UP) {
+            boolean touchedBasis = candle.low() <= band.basis() * (1.0 + tolerance);
+            boolean recoveredAboveBasis = candle.close() >= band.basis();
+            if (touchedBasis && recoveredAboveBasis) {
+                return PositionSide.LONG;
+            }
+        }
+        // ST 방향이 아래 일 때
+        if (superTrend.direction() == SuperTrend.Direction.DOWN) {
+            boolean touchedBasis = candle.high() >= band.basis() * (1.0 - tolerance);
+            boolean recoveredBelowBasis = candle.close() <= band.basis();
+            if (touchedBasis && recoveredBelowBasis) {
+                return PositionSide.SHORT;
+            }
+        }
+        return null;
+    }
+
+    // 밴드 상단/하단 접근 조건 확인
+    private PositionSide determineBbPierceSide(Candle candle, BollingerBand band, SuperTrend superTrend, double tolerancePercent) {
+        double tolerance = tolerancePercent / 100.0;
+        // ST 방향이 상승일 때 (ST 선은 아래에 있음) 허용 오차를 통해 충돌을 확인
+        if (superTrend.direction() == SuperTrend.Direction.UP) {
+            boolean touchedLowerBand = candle.low() <= band.lower() * (1.0 + tolerance);
+
+            if (touchedLowerBand) {
+                return PositionSide.LONG;
+            }
+        }
+
+        if (superTrend.direction() == SuperTrend.Direction.DOWN) {
+            boolean touchedUpperBand = candle.high() >= band.upper() * (1.0 - tolerance);
+            if (touchedUpperBand) {
+                return PositionSide.SHORT;
+            }
+        }
+        return null;
+    }
+
+    // 진입 조건 판단 (진입 방향 판단)
+    private PositionSide determineEntrySide(Candle candle, BollingerBand band, SuperTrend superTrend, BacktestConfig config) {
+        return switch (config.entryMode()) {
+            // ST 전환 신호를 포지션 방향으로 변환
+            case ST_FLIP ->
+                    positionSideFromSignal(superTrend.signal());
+
+            // 볼린저 밴드 폭 확인
+            case MA_BOUNCE -> {
+                if (!hasSufficientBandWidth(band, config)) {
+                    yield null;
+                }
+                // 밴드 폭 만족 시 중심선 반등 조건 확인
+                yield determineMaBounceSide(candle, band, superTrend, config.maTolerancePercent());
+            }
+
+            // 볼린저 밴드 폭 확인
+            case BB_PIERCE -> {
+                if (!hasSufficientBandWidth(band, config)) {
+                    yield null;
+                }
+                // 밴드 폭 만족 시 상단/하단 충돌 조건 확인
+                yield determineBbPierceSide(candle, band, superTrend, config.bbTolerancePercent());
+            }
+        };
+    }
+
+    // 가상 포지션 생성
+    private OpenPosition enterPosition(Candle candle, PositionSide side, double balance, BacktestConfig config) {
+        double entryPrice = candle.open();
+        double margin = balance * config.marginUsageRate();
+        double notional = margin * config.leverage();
+        double quantity = notional / entryPrice;
+        double entryFee = notional * config.feeRate();
+
+        return new OpenPosition(
+                candle.openTimeMs(),
+                side,
+                entryPrice,
+                quantity,
+                entryFee,
+                config.riskManagement()
+        );
+    }
+
+    // 포지션 청산 및 손익 계산
+    private BacktestTrade closePosition(OpenPosition position, long exitTimeMs, double exitPrice, double balanceBefore, double feeRate, ExitReason exitReason) {
+        double quantity = position.getRemainingQuantity();
+        double priceDifference = position.getSide() == PositionSide.LONG
+                ? exitPrice - position.getEntryPrice()
+                : position.getEntryPrice() - exitPrice;
+
+        double grossPnl = priceDifference * quantity;
+        double exitFee = exitPrice * quantity * feeRate;
+        double netPnl = grossPnl - position.getEntryFee() - exitFee;
+        double balanceAfter = balanceBefore + netPnl;
+
+        return new BacktestTrade(
+                position.getEntryTimeMs(),
+                exitTimeMs,
+                position.getSide(),
+                position.getEntryPrice(),
+                exitPrice,
+                position.getInitialQuantity(),
+                position.getEntryFee(),
+                exitFee,
+                balanceAfter,
+                exitReason
+        );
+    }
+
+    // 백테스트 전체 실행
+    public BacktestResult run(List<Candle> candles, BacktestConfig config) {
+        Objects.requireNonNull(candles, "candles이 null이면 안됩니다.");
+        Objects.requireNonNull(config, "config가 null이면 안됩니다.");
+
+        if (candles.size() < 2) {
+            return BacktestResult.from(config.initialBalance(), List.of());
+        }
+
+        // 볼린저밴드와 슈퍼트렌드 계산
+        List<BollingerBand> bands = BollingerBandCalculator.calculate(candles, config.bollingerPeriod(), config.bollingerMultiplier());
+        List<SuperTrend> superTrends = SuperTrendCalculator.calculate(candles, config.superTrendLength(), config.superTrendFactor());
+
+        // 완료된 거래 목록, 가상 잔고, 가상 포지션, 마지막으로 진입했던 ST 추세 번호
+        List<BacktestTrade> trades = new ArrayList<>();
+        double balance = config.initialBalance();
+        OpenPosition openPosition = null;
+        long lastEnteredTrendId = -1L;
+
+        // 캔들을 시간 순서대로 조회합니다
+        for (int i = 1; i < candles.size(); i++) {
+            // 현재 캔들입니다 (i)
+            Candle executionCandle = candles.get(i);
+            // 신호를 확인 할 캔들은 이전에 완료된 캔들입니다 (i-1)
+            Candle signalCandle = candles.get(i - 1);
+            BollingerBand band = bands.get(i - 1);
+            SuperTrend superTrend = superTrends.get(i - 1);
+
+            // 사용 가능 여부 확인 (캔들이 1개라면 코드를 건너띄고, 다음 캔들로 이동함)
+            if (!superTrend.isAvailable()) {
+                continue;
+            }
+
+            // 현재 보유 중인 포지션과 반대되는 SuperTrend 전환 신호가 발생하면 청산합니다.
+            if (openPosition != null && shouldExitBySuperTrend(openPosition, superTrend)) {
+                // 내부적으로 포지션을 종료하고 손익을 계산합니다 (closePosition())
+                BacktestTrade completedTrade = closePosition(
+                        openPosition,
+                        executionCandle.openTimeMs(),
+                        executionCandle.open(),
+                        balance,
+                        config.feeRate(),
+                        ExitReason.SUPER_TREND
+                );
+                // 청산 후 완료된 거래의 손익을 계산하고, 반환합니다.
+                trades.add(completedTrade);
+                balance = completedTrade.balanceAfter();
+                openPosition = null;
+            }
+
+            // 새로운 진입 방향을 판단합니다 (만약 진입 조건이 충족되지 않는다면 null이 반환되어 다음 캔들로 넘어갑니다)
+            // Direction : 시장의 추세 상태 / Signal : 추세가 방금 바뀌었음을 나타냄 / PositionSide : 백테스트가 실제로 보유중인 방향
+            // Direction이 Long으로 바뀌면, Signal은 처음에 Long을 반환합니다. 그리고 Direction이 다시 바뀌기 전까지는 None 상태를 유지합니다
+            // 아직 Direction이 유지중이라면, 조건을 충족하는 순간 (determineEntrySide) PositionSide가 진입을 시도합니다
+            // 보유중인 상황에서 Direction의 추세가 바뀌면, Signal은  Short를 반환하고, PositionSide는 청산됩니다
+            PositionSide entrySide = determineEntrySide(signalCandle, band, superTrend, config);
+            // oneEntryPerTrend()는 추세 당 한 번의 진입만을 허용할지 말지에 대한 설정입니다. True이면 추세 당 한 번만 허용합니다.
+            // trendid는 추세가 바뀌면 증가하는 추세 번호입니다. 해당 추세 번호가 마지막 추세 번호와 같다면, 같은 추세에서 이미 한 번 진입했다는 의미입니다.
+            boolean alreadyEnteredInTrend = config.oneEntryPerTrend() && lastEnteredTrendId == superTrend.trendId();
+
+            // 가상 포지션을 생성합니다
+            if (openPosition == null && entrySide != null && !alreadyEnteredInTrend && balance > 0.0) {
+                openPosition = enterPosition(
+                        executionCandle,
+                        entrySide,
+                        balance,
+                        config
+                );
+                // 추세 번호를 주입합니다.
+                lastEnteredTrendId = superTrend.trendId();
+            }
+        }
+
+        // 데이터가 끝났는데 포지션이 남아 있다면 마지막 캔들의 종가로 강제 청산합니다. (테스트의 마지막 캔들에서도 포지션이 남아 있는 경우에 대한 예외)
+        if (openPosition != null) {
+            Candle lastCandle = candles.get(candles.size() - 1);
+            BacktestTrade completedTrade = closePosition(
+                    openPosition,
+                    lastCandle.openTimeMs(),
+                    lastCandle.close(),
+                    balance,
+                    config.feeRate(),
+                    ExitReason.END_OF_DATA
+            );
+            trades.add(completedTrade);
+        }
+        return BacktestResult.from(config.initialBalance(), trades);
+    }
+}
