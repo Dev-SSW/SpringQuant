@@ -2,6 +2,8 @@ package io.github.devssw.springquant.backtest.dto;
 
 import io.github.devssw.springquant.backtest.BacktestConfig;
 import io.github.devssw.springquant.backtest.EntryMode;
+import io.github.devssw.springquant.backtest.RiskManagementConfig;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 
 public record BacktestRequest (
@@ -28,7 +30,9 @@ public record BacktestRequest (
         @NotNull EntryMode entryMode,
         @PositiveOrZero double maTolerancePercent,
         @PositiveOrZero double bbTolerancePercent,
-        boolean oneEntryPerTrend
+        boolean oneEntryPerTrend,
+
+        @NotNull @Valid RiskManagementConfig riskManagement
 ) {
 
     public BacktestRequest {
@@ -51,7 +55,8 @@ public record BacktestRequest (
                     entryMode,
                     maTolerancePercent,
                     bbTolerancePercent,
-                    oneEntryPerTrend
+                    oneEntryPerTrend,
+                    riskManagement
             );
         }
 }

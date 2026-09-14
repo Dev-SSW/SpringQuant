@@ -15,12 +15,9 @@ import java.util.Objects;
 public final class BacktestEngine {
     // 현재 포지션의 반대 신호인지 확인 (포지션이 롱인데, 신호가 숏이면 True -> 청산됨)
     private boolean shouldExitBySuperTrend(OpenPosition position, SuperTrend superTrend) {
-        return switch (position.side()) {
-            case LONG ->
-                    superTrend.signal() == SuperTrend.Signal.SHORT;
-
-            case SHORT ->
-                    superTrend.signal() == SuperTrend.Signal.LONG;
+        return switch (position.getSide()) {
+            case LONG -> superTrend.signal() == SuperTrend.Signal.SHORT;
+            case SHORT -> superTrend.signal() == SuperTrend.Signal.LONG;
         };
     }
 
@@ -121,34 +118,36 @@ public final class BacktestEngine {
                 side,
                 entryPrice,
                 quantity,
-                entryFee
+                entryFee,
+                config.riskManagement()
         );
     }
 
     // 포지션 청산 및 손익 계산
     private BacktestTrade closePosition(OpenPosition position, long exitTimeMs, double exitPrice, double balanceBefore, double feeRate, ExitReason exitReason) {
-        double priceDifference = position.side() == PositionSide.LONG ? exitPrice - position.entryPrice() : position.entryPrice() - exitPrice;
-        double grossPnl = priceDifference * position.quantity();
-        double exitFee = exitPrice * position.quantity() * feeRate;
-        double netPnl = grossPnl - position.entryFee() - exitFee;
+        double quantity = position.getRemainingQuantity();
+        double priceDifference = position.getSide() == PositionSide.LONG
+                ? exitPrice - position.getEntryPrice()
+                : position.getEntryPrice() - exitPrice;
+
+        double grossPnl = priceDifference * quantity;
+        double exitFee = exitPrice * quantity * feeRate;
+        double netPnl = grossPnl - position.getEntryFee() - exitFee;
         double balanceAfter = balanceBefore + netPnl;
 
         return new BacktestTrade(
-                position.entryTimeMs(),
+                position.getEntryTimeMs(),
                 exitTimeMs,
-                position.side(),
-                position.entryPrice(),
+                position.getSide(),
+                position.getEntryPrice(),
                 exitPrice,
-                position.quantity(),
-                position.entryFee(),
+                position.getInitialQuantity(),
+                position.getEntryFee(),
                 exitFee,
                 balanceAfter,
                 exitReason
         );
     }
-
-    // 현재 보유중인 가상 포지션 저장
-    private record OpenPosition(long entryTimeMs, PositionSide side, double entryPrice, double quantity, double entryFee) { }
 
     // 백테스트 전체 실행
     public BacktestResult run(List<Candle> candles, BacktestConfig config) {

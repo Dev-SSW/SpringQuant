@@ -23,7 +23,10 @@ public record BacktestConfig(
         // 볼린저밴드 충돌 허용 오차
         double bbTolerancePercent,
         // 진입 허용 True/False
-        boolean oneEntryPerTrend
+        boolean oneEntryPerTrend,
+
+        // 위험관리설정 추가
+        RiskManagementConfig riskManagement
 ) {
     // initialBalance : 테스트를 위해 추가한 가상의 시작 금액
     // 나머지는 차례대로 수수료, 배율, 잔고의 몇 %를 사용할지
@@ -73,5 +76,7 @@ public record BacktestConfig(
         if (!Double.isFinite(bbTolerancePercent) || bbTolerancePercent < 0.0) {
             throw new IllegalArgumentException("bbTolerancePercent가 음수여서는 안됩니다.");
         }
+
+        Objects.requireNonNull(riskManagement, "riskManagement가 null이어서는 안됩니다.");
     }
 }
