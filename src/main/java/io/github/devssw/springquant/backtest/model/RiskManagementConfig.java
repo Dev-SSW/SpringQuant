@@ -13,12 +13,14 @@ public record RiskManagementConfig(
     // 허용 오차
     private static final double RATIO_TOLERANCE = 1e-9;
 
+    // 손절 범위 값 검증
     private static void validateStopLossPercent(double stopLossPercent) {
         if (!Double.isFinite(stopLossPercent) || stopLossPercent <= 0.0) {
             throw new IllegalArgumentException("stopLossPercent는 0보다 큰 유한한 값이어야 합니다.");
         }
     }
 
+    // 단계별 익절 범위에 대한 값 검증
     private static void validateTakeProfitLevels(List<TakeProfitLevel> takeProfitLevels) {
         if (takeProfitLevels.isEmpty()) {
             throw new IllegalArgumentException("익절 단계는 최소 하나 이상이어야 합니다.");
@@ -41,6 +43,7 @@ public record RiskManagementConfig(
         }
     }
 
+    // 손절가 이동 True/False와 손절 승격은 몇 %에 닿았을 때 할 것인지에 대한 값에 대한 검증
     private static void validateBreakEven(boolean moveStopToBreakEven, double breakEvenTriggerPercent) {
         if (!Double.isFinite(breakEvenTriggerPercent) || breakEvenTriggerPercent < 0.0) {
             throw new IllegalArgumentException("breakEvenTriggerPercent는 0 이상의 유한한 값이어야 합니다.");
