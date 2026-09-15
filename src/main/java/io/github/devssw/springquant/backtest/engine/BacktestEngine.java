@@ -14,6 +14,59 @@ import java.util.Objects;
 
 @Service
 public final class BacktestEngine {
+    // 분할 익절 처리 메서드
+    private double processTakeProfits(
+            OpenPosition position,
+            Candle candle,
+            double currentBalance,
+            double feeRate
+    ) {
+        double updatedBalance = currentBalance;
+
+        // 다음 익절 단계가 남아있는 동안 실행
+        while (position.hasNextTakeProfit()) {
+            // 현재 익절 설정 조회
+            TakeProfitLevel level = position.nextTakeProfitLevel();
+            // 설정의 목표 퍼센트를 조회하고, 실제 가격을 반환
+            double takeProfitPrice = position.takeProfitPrice(level);
+
+            // 이미 목표에 닿았는지 확인하고, 닿지 않은 상태라면 반복 종료
+            if (!isTakeProfitReached(position, candle, takeProfitPrice)) {
+                break;
+            }
+
+            // 설정 청산 수량을 조회하고 계산
+            double quantity = position.takeProfitQuantity(level);
+
+            //
+            BacktestExit exit = position.closeQuantity(
+                    candle.openTimeMs(),
+                    takeProfitPrice,
+                    quantity,
+                    feeRate,
+                    ExitReason.TAKE_PROFIT
+            );
+
+            // 다음 익절 단계로 인덱스 변경
+            position.completeTakeProfitLevel();
+            updatedBalance += exit.realizedPnl();
+
+            if (position.isClosed()) {
+                break;
+            }
+        }
+
+        return updatedBalance;
+    }
+
+    // 익절에 도달했는지 여부를 확인합니다
+    private boolean isTakeProfitReached(OpenPosition position, Candle candle, double takeProfitPrice) {
+        return switch (position.getSide()) {
+            case LONG -> candle.high() >= takeProfitPrice;
+            case SHORT -> candle.low() <= takeProfitPrice;
+        };
+    }
+
     // 현재 포지션의 반대 신호인지 확인 (포지션이 롱인데, 신호가 숏이면 True -> 청산됨)
     private boolean shouldExitBySuperTrend(OpenPosition position, SuperTrend superTrend) {
         return switch (position.getSide()) {
@@ -124,30 +177,41 @@ public final class BacktestEngine {
         );
     }
 
-    // 포지션 청산 및 손익 계산
-    private BacktestTrade closePosition(OpenPosition position, long exitTimeMs, double exitPrice, double balanceBefore, double feeRate, ExitReason exitReason) {
-        double quantity = position.getRemainingQuantity();
-        double priceDifference = position.getSide() == PositionSide.LONG
-                ? exitPrice - position.getEntryPrice()
-                : position.getEntryPrice() - exitPrice;
-
-        double grossPnl = priceDifference * quantity;
-        double exitFee = exitPrice * quantity * feeRate;
-        double netPnl = grossPnl - position.getEntryFee() - exitFee;
-        double balanceAfter = balanceBefore + netPnl;
+    // 모든 수량이 청산된 포지션을 완료 거래로 변환
+    private BacktestTrade completeTrade(OpenPosition position, double balanceAfter) {
+        if (!position.isClosed()) {
+            throw new IllegalStateException("포지션 수량이 남아 있어 거래를 완료할 수 없습니다.");
+        }
 
         return new BacktestTrade(
                 position.getEntryTimeMs(),
-                exitTimeMs,
                 position.getSide(),
                 position.getEntryPrice(),
-                exitPrice,
                 position.getInitialQuantity(),
                 position.getEntryFee(),
-                exitFee,
-                balanceAfter,
-                exitReason
+                position.getExits(),
+                balanceAfter
         );
+    }
+
+    // 포지션 청산 및 손익 계산
+    private BacktestTrade closePosition(
+            OpenPosition position,
+            long exitTimeMs,
+            double exitPrice,
+            double currentBalance,
+            double feeRate,
+            ExitReason exitReason
+    ) {    BacktestExit exit = position.closeQuantity(
+            exitTimeMs,
+            exitPrice,
+            position.getRemainingQuantity(),
+            feeRate,
+            exitReason
+    );
+
+        double balanceAfter = currentBalance + exit.realizedPnl();
+        return completeTrade(position, balanceAfter);
     }
 
     // 백테스트 전체 실행
@@ -218,8 +282,27 @@ public final class BacktestEngine {
                         balance,
                         config
                 );
+                // 진입 수수료 차감
+                balance -= openPosition.getEntryFee();
                 // 추세 번호를 주입합니다.
                 lastEnteredTrendId = superTrend.trendId();
+            }
+
+            // 현재 실행 캔들에서 단계별 익절 가격에 도달했는지 확인
+            if (openPosition != null) {
+                balance = processTakeProfits(
+                        openPosition,
+                        executionCandle,
+                        balance,
+                        config.feeRate()
+                );
+
+                // 마지막 익절 단계까지 실행되어 수량이 모두 청산된 경우
+                if (openPosition.isClosed()) {
+                    BacktestTrade completedTrade = completeTrade(openPosition, balance);
+                    trades.add(completedTrade);
+                    openPosition = null;
+                }
             }
         }
 
