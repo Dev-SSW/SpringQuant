@@ -1,11 +1,10 @@
-package io.github.devssw.springquant.backtest.api;
+package io.github.devssw.springquant.backtest.service;
 
 import io.github.devssw.springquant.backtest.BacktestTestFixtures;
 import io.github.devssw.springquant.backtest.engine.BacktestEngine;
 import io.github.devssw.springquant.backtest.model.BacktestConfig;
 import io.github.devssw.springquant.backtest.model.BacktestResult;
 import io.github.devssw.springquant.backtest.model.EntryMode;
-import io.github.devssw.springquant.backtest.service.BacktestService;
 import io.github.devssw.springquant.market.Candle;
 import io.github.devssw.springquant.market.candledata.MarketDataClient;
 import org.junit.jupiter.api.BeforeEach;
