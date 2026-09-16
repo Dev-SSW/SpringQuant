@@ -14,150 +14,8 @@ import java.util.Objects;
 
 @Service
 public final class BacktestEngine {
-    // 분할 익절 처리 메서드
-    private double processTakeProfits(
-            OpenPosition position,
-            Candle candle,
-            double currentBalance,
-            double feeRate
-    ) {
-        double updatedBalance = currentBalance;
-
-        // 다음 익절 단계가 남아있는 동안 실행
-        while (position.hasNextTakeProfit()) {
-            // 현재 익절 설정 조회
-            TakeProfitLevel level = position.nextTakeProfitLevel();
-            // 설정의 목표 퍼센트를 조회하고, 실제 가격을 반환
-            double takeProfitPrice = position.takeProfitPrice(level);
-
-            // 이미 목표에 닿았는지 확인하고, 닿지 않은 상태라면 반복 종료
-            if (!isTakeProfitReached(position, candle, takeProfitPrice)) {
-                break;
-            }
-
-            // 설정 청산 수량을 조회하고 계산
-            double quantity = position.takeProfitQuantity(level);
-
-            //
-            BacktestExit exit = position.closeQuantity(
-                    candle.openTimeMs(),
-                    takeProfitPrice,
-                    quantity,
-                    feeRate,
-                    ExitReason.TAKE_PROFIT
-            );
-
-            // 다음 익절 단계로 인덱스 변경
-            position.completeTakeProfitLevel();
-            updatedBalance += exit.realizedPnl();
-
-            if (position.isClosed()) {
-                break;
-            }
-        }
-
-        return updatedBalance;
-    }
-
-    // 익절에 도달했는지 여부를 확인합니다
-    private boolean isTakeProfitReached(OpenPosition position, Candle candle, double takeProfitPrice) {
-        return switch (position.getSide()) {
-            case LONG -> candle.high() >= takeProfitPrice;
-            case SHORT -> candle.low() <= takeProfitPrice;
-        };
-    }
-
-    // 현재 포지션의 반대 신호인지 확인 (포지션이 롱인데, 신호가 숏이면 True -> 청산됨)
-    private boolean shouldExitBySuperTrend(OpenPosition position, SuperTrend superTrend) {
-        return switch (position.getSide()) {
-            case LONG -> superTrend.signal() == SuperTrend.Signal.SHORT;
-            case SHORT -> superTrend.signal() == SuperTrend.Signal.LONG;
-        };
-    }
-
-    // ST 신호를 포지션 방향으로 변환
-    private PositionSide positionSideFromSignal(SuperTrend.Signal signal) {
-        return switch (signal) {
-            case LONG -> PositionSide.LONG;
-            case SHORT -> PositionSide.SHORT;
-            case NONE -> null;
-        };
-    }
-
-    // 설정해둔 밴드 폭 최소 넓이를 충족하는지 확인
-    private boolean hasSufficientBandWidth(BollingerBand band, BacktestConfig config) {
-        return band.isAvailable() && band.widthPercent() >= config.bollingerWidthMinPercent();
-    }
-
-    // 중심선 반등 조건 확인
-    private PositionSide determineMaBounceSide(Candle candle, BollingerBand band, SuperTrend superTrend, double tolerancePercent) {
-        double tolerance = tolerancePercent / 100.0;
-        // ST 방향이 상승일 때 (ST 선은 아래에 있음) 허용 오차를 통해 반등을 확인
-        if (superTrend.direction() == SuperTrend.Direction.UP) {
-            boolean touchedBasis = candle.low() <= band.basis() * (1.0 + tolerance);
-            boolean recoveredAboveBasis = candle.close() >= band.basis();
-            if (touchedBasis && recoveredAboveBasis) {
-                return PositionSide.LONG;
-            }
-        }
-        // ST 방향이 아래 일 때
-        if (superTrend.direction() == SuperTrend.Direction.DOWN) {
-            boolean touchedBasis = candle.high() >= band.basis() * (1.0 - tolerance);
-            boolean recoveredBelowBasis = candle.close() <= band.basis();
-            if (touchedBasis && recoveredBelowBasis) {
-                return PositionSide.SHORT;
-            }
-        }
-        return null;
-    }
-
-    // 밴드 상단/하단 접근 조건 확인
-    private PositionSide determineBbPierceSide(Candle candle, BollingerBand band, SuperTrend superTrend, double tolerancePercent) {
-        double tolerance = tolerancePercent / 100.0;
-        // ST 방향이 상승일 때 (ST 선은 아래에 있음) 허용 오차를 통해 충돌을 확인
-        if (superTrend.direction() == SuperTrend.Direction.UP) {
-            boolean touchedLowerBand = candle.low() <= band.lower() * (1.0 + tolerance);
-
-            if (touchedLowerBand) {
-                return PositionSide.LONG;
-            }
-        }
-
-        if (superTrend.direction() == SuperTrend.Direction.DOWN) {
-            boolean touchedUpperBand = candle.high() >= band.upper() * (1.0 - tolerance);
-            if (touchedUpperBand) {
-                return PositionSide.SHORT;
-            }
-        }
-        return null;
-    }
-
-    // 진입 조건 판단 (진입 방향 판단)
-    private PositionSide determineEntrySide(Candle candle, BollingerBand band, SuperTrend superTrend, BacktestConfig config) {
-        return switch (config.entryMode()) {
-            // ST 전환 신호를 포지션 방향으로 변환
-            case ST_FLIP ->
-                    positionSideFromSignal(superTrend.signal());
-
-            // 볼린저 밴드 폭 확인
-            case MA_BOUNCE -> {
-                if (!hasSufficientBandWidth(band, config)) {
-                    yield null;
-                }
-                // 밴드 폭 만족 시 중심선 반등 조건 확인
-                yield determineMaBounceSide(candle, band, superTrend, config.maTolerancePercent());
-            }
-
-            // 볼린저 밴드 폭 확인
-            case BB_PIERCE -> {
-                if (!hasSufficientBandWidth(band, config)) {
-                    yield null;
-                }
-                // 밴드 폭 만족 시 상단/하단 충돌 조건 확인
-                yield determineBbPierceSide(candle, band, superTrend, config.bbTolerancePercent());
-            }
-        };
-    }
+    private final EntrySignalEvaluator entrySignalEvaluator = new EntrySignalEvaluator();
+    private final PositionRiskProcessor positionRiskProcessor = new PositionRiskProcessor();
 
     // 가상 포지션 생성
     private OpenPosition enterPosition(Candle candle, PositionSide side, double balance, BacktestConfig config) {
@@ -202,13 +60,14 @@ public final class BacktestEngine {
             double currentBalance,
             double feeRate,
             ExitReason exitReason
-    ) {    BacktestExit exit = position.closeQuantity(
-            exitTimeMs,
-            exitPrice,
-            position.getRemainingQuantity(),
-            feeRate,
-            exitReason
-    );
+    ) {
+        BacktestExit exit = position.closeQuantity(
+                exitTimeMs,
+                exitPrice,
+                position.getRemainingQuantity(),
+                feeRate,
+                exitReason
+        );
 
         double balanceAfter = currentBalance + exit.realizedPnl();
         return completeTrade(position, balanceAfter);
@@ -248,7 +107,7 @@ public final class BacktestEngine {
             }
 
             // 현재 보유 중인 포지션과 반대되는 SuperTrend 전환 신호가 발생하면 청산합니다.
-            if (openPosition != null && shouldExitBySuperTrend(openPosition, superTrend)) {
+            if (openPosition != null && entrySignalEvaluator.shouldExitBySuperTrend(openPosition, superTrend)) {
                 // 내부적으로 포지션을 종료하고 손익을 계산합니다 (closePosition())
                 BacktestTrade completedTrade = closePosition(
                         openPosition,
@@ -269,7 +128,7 @@ public final class BacktestEngine {
             // Direction이 Long으로 바뀌면, Signal은 처음에 Long을 반환합니다. 그리고 Direction이 다시 바뀌기 전까지는 None 상태를 유지합니다
             // 아직 Direction이 유지중이라면, 조건을 충족하는 순간 (determineEntrySide) PositionSide가 진입을 시도합니다
             // 보유중인 상황에서 Direction의 추세가 바뀌면, Signal은  Short를 반환하고, PositionSide는 청산됩니다
-            PositionSide entrySide = determineEntrySide(signalCandle, band, superTrend, config);
+            PositionSide entrySide = entrySignalEvaluator.determineEntrySide(signalCandle, band, superTrend, config);
             // oneEntryPerTrend()는 추세 당 한 번의 진입만을 허용할지 말지에 대한 설정입니다. True이면 추세 당 한 번만 허용합니다.
             // trendid는 추세가 바뀌면 증가하는 추세 번호입니다. 해당 추세 번호가 마지막 추세 번호와 같다면, 같은 추세에서 이미 한 번 진입했다는 의미입니다.
             boolean alreadyEnteredInTrend = config.oneEntryPerTrend() && lastEnteredTrendId == superTrend.trendId();
@@ -290,13 +149,12 @@ public final class BacktestEngine {
 
             // 현재 실행 캔들에서 단계별 익절 가격에 도달했는지 확인
             if (openPosition != null) {
-                balance = processTakeProfits(
+                double realizedPnl = positionRiskProcessor.process(
                         openPosition,
                         executionCandle,
-                        balance,
                         config.feeRate()
                 );
-
+                balance += realizedPnl;
                 // 마지막 익절 단계까지 실행되어 수량이 모두 청산된 경우
                 if (openPosition.isClosed()) {
                     BacktestTrade completedTrade = completeTrade(openPosition, balance);
