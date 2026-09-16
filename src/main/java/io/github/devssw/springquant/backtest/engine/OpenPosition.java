@@ -8,10 +8,8 @@ import lombok.Getter;
 import java.util.ArrayList;
 import java.util.List;
 
-// 현재 보유 중인 포지션을 표현하는 레코드입니다 (백테스트 내부에서만 사용하기 위해, public을 제외함)
-// 열려있는 포지션의 상태를 저장해두기 위해 필요한 파일입니다
-// 2번 캔들에서 시작하고, 5번 캔들에서 끝나는 거래가 있다면, 3번-4번 캔들에서의 포지션 상태 기록이 필요합니다
-// 다음에 만들 백테스트 엔진은 시간 순서대로 진입과 청산을 반복하기 때문에 포지션 상태 기록이 필요합니다
+// 현재 보유 중인 포지션을 표현하는 레코드 (백테스트 내부에서만 사용하기 위해, public을 제외)
+// 열려있는 포지션의 상태를 저장해두기 위해 필요한 파일
 @Getter
 final class OpenPosition {
     private static final double QUANTITY_TOLERANCE = 1e-12;
@@ -24,6 +22,7 @@ final class OpenPosition {
     private final double entryFee;
     private final RiskManagementConfig riskManagement;
 
+    // 익절 분할 결과 리스트 (거래 한 건씩)
     @Getter(AccessLevel.NONE)
     private final List<BacktestExit> exits = new ArrayList<>();
 
@@ -52,55 +51,6 @@ final class OpenPosition {
         this.currentStopPrice = calculateInitialStopPrice();
         this.nextTakeProfitIndex = 0;
         this.breakEvenApplied = false;
-    }
-
-    // 최초 손절가를 계산
-    private double calculateInitialStopPrice() {
-        double stopLossRate = riskManagement.stopLossPercent() / 100.0;
-
-        return switch (side) {
-            case LONG -> entryPrice * (1.0 - stopLossRate);
-            case SHORT -> entryPrice * (1.0 + stopLossRate);
-        };
-    }
-
-    // 익절 단계가 남았는지 확인
-    boolean hasNextTakeProfit() {
-        return nextTakeProfitIndex < riskManagement.takeProfitLevels().size();
-    }
-
-    // 현재 검사해야 할 익절 설정 조회
-    TakeProfitLevel nextTakeProfitLevel() {
-        if (!hasNextTakeProfit()) {
-            throw new IllegalStateException("남은 익절 단계가 없습니다.");
-        }
-
-        return riskManagement.takeProfitLevels().get(nextTakeProfitIndex);
-    }
-
-    // 익절 단계 별 목표 퍼센트를 실제 가격으로 변환
-    double takeProfitPrice(TakeProfitLevel level) {
-        double targetRate = level.targetPercent() / 100.0;
-
-        return switch (side) {
-            case LONG -> entryPrice * (1.0 + targetRate);
-            case SHORT -> entryPrice * (1.0 - targetRate);
-        };
-    }
-
-    // 익절 단계 별 청산 수량을 계산 (초기 수량을 기준으로 계산)
-    double takeProfitQuantity(TakeProfitLevel level) {
-        double requestedQuantity = initialQuantity * level.closeRatio();
-        return Math.min(requestedQuantity, remainingQuantity);
-    }
-
-    // 수량 값 검증
-    private void validateCloseQuantity(double quantity) {
-        if (!Double.isFinite(quantity)
-                || quantity <= 0.0
-                || quantity > remainingQuantity + QUANTITY_TOLERANCE) {
-            throw new IllegalArgumentException("유효하지 않은 청산 수량입니다.");
-        }
     }
 
     // 포지션의 일부/전체를 실제로 청산하는 메서드
@@ -133,6 +83,15 @@ final class OpenPosition {
         return exit;
     }
 
+    // 수량 값 검증
+    private void validateCloseQuantity(double quantity) {
+        if (!Double.isFinite(quantity)
+                || quantity <= 0.0
+                || quantity > remainingQuantity + QUANTITY_TOLERANCE) {
+            throw new IllegalArgumentException("유효하지 않은 청산 수량입니다.");
+        }
+    }
+
     // 청산 수수료를 제외한 실현 손익 계산
     private double calculateGrossPnl(double exitPrice, double quantity) {
         double priceDifference = side == PositionSide.LONG
@@ -160,12 +119,49 @@ final class OpenPosition {
         }
     }
 
+    // 최초 손절가를 계산
+    private double calculateInitialStopPrice() {
+        double stopLossRate = riskManagement.stopLossPercent() / 100.0;
+        return switch (side) {
+            case LONG -> entryPrice * (1.0 - stopLossRate);
+            case SHORT -> entryPrice * (1.0 + stopLossRate);
+        };
+    }
+
+    //  BacktestEngine에서 사용 //
+    // 익절 단계가 남았는지 확인
+    boolean hasNextTakeProfit() {
+        return nextTakeProfitIndex < riskManagement.takeProfitLevels().size();
+    }
+
+    // 현재 검사해야 할 익절 설정 조회
+    TakeProfitLevel nextTakeProfitLevel() {
+        if (!hasNextTakeProfit()) {
+            throw new IllegalStateException("남은 익절 단계가 없습니다.");
+        }
+        return riskManagement.takeProfitLevels().get(nextTakeProfitIndex);
+    }
+
+    // 익절 단계 별 목표 퍼센트를 실제 가격으로 변환
+    double takeProfitPrice(TakeProfitLevel level) {
+        double targetRate = level.targetPercent() / 100.0;
+        return switch (side) {
+            case LONG -> entryPrice * (1.0 + targetRate);
+            case SHORT -> entryPrice * (1.0 - targetRate);
+        };
+    }
+
+    // 익절 단계 별 청산 수량을 계산 (초기 수량을 기준으로 계산)
+    double takeProfitQuantity(TakeProfitLevel level) {
+        double requestedQuantity = initialQuantity * level.closeRatio();
+        return Math.min(requestedQuantity, remainingQuantity);
+    }
+
     // 현재 익절 단계가 처리 됐다는 것을 기록함
     void completeTakeProfitLevel() {
         if (!hasNextTakeProfit()) {
             throw new IllegalStateException("남은 익절 단계가 없습니다.");
         }
-
         nextTakeProfitIndex++;
     }
 

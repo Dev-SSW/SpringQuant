@@ -2,7 +2,7 @@ package io.github.devssw.springquant.backtest.model;
 
 import java.util.Objects;
 
-// 분할 익절에 따라 포지션의 일부, 또는 전부를 청산했을 때 결과입니다
+// 분할 익절에 따라 포지션의 일부, 또는 전부를 청산했을 때 결과입니다 (거래 한 건)
 // 기존의 BacktestTrade는 포지션 전체를 한 번에 청산하는 구조였습니다.
 public record BacktestExit(
         // 청산 -> 시각, 가격, 수량, 수수료 차감 전 손익, 수수료, 사유
