@@ -152,7 +152,8 @@ public final class BacktestEngine {
                 double realizedPnl = positionRiskProcessor.process(
                         openPosition,
                         executionCandle,
-                        config.feeRate()
+                        config.feeRate(),
+                        config.leverage()
                 );
                 balance += realizedPnl;
                 // 마지막 익절 단계까지 실행되어 수량이 모두 청산된 경우

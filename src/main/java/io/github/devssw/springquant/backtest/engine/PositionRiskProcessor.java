@@ -8,13 +8,14 @@ import io.github.devssw.springquant.market.Candle;
 
 // BacktestEngine에서 분리 - 보유 중인 포지션의 익절, 손절 등 위험관리 조건을 처리
 final class PositionRiskProcessor {
+    private final LiquidationPriceCalculator liquidationPriceCalculator = new LiquidationPriceCalculator();
     /**
      * 현재 캔들에서 발생한 위험관리 청산을 처리하고 실현 손익을 반환합니다.
      * 같은 캔들에서 손절과 익절이 모두 가능한 경우 손절을 먼저 처리합니다. (보수적인 테스트 결과를 확인하기 위함)
      */
-    double process(OpenPosition position, Candle candle, double feeRate) {
-        // 손절가에 닿았는지 먼저 확인 및 처리
-        double realizedPnl = processStopLoss(position, candle, feeRate);
+    double process(OpenPosition position, Candle candle, double feeRate, int leverage) {
+        // 손절가/청산가에 닿았는지 먼저 확인 및 처리
+        double realizedPnl = processAdverseExit(position, candle, feeRate, leverage);
 
         // 포지션 남았는지 확인 1
         if (position.isClosed()) {
@@ -116,5 +117,76 @@ final class PositionRiskProcessor {
         if (position.shouldMoveStopToBreakEven(candle.high(), candle.low())) {
             position.moveStopToBreakEven();
         }
+    }
+
+    // =========== 강제 청산 =========== //
+    // 손절과 강제 청산 순서 판단 메서드 (무엇이 먼저인지)
+    private double processAdverseExit(OpenPosition position, Candle candle, double feeRate, int leverage) {
+        double liquidationPrice = liquidationPriceCalculator.calculate(position.getSide(), position.getEntryPrice(), leverage);
+        // 시가가 이미 청산가를 넘어섰는지 확인
+        if (isLiquidatedAtOpen(position, candle, liquidationPrice)) {
+            // 이미 넘어섰다면 강제 청산
+            return liquidate(position, candle, liquidationPrice, feeRate);
+        }
+
+        // 청산가에는 아직 닿지 않은 상황에서, 손절가와 강제 청산가 중 어느 가격이 더 가까운지 확인
+        if (isStopBeforeLiquidation(position, liquidationPrice)) {
+            // 손절가가 가까운 상황이라면 손절 도달 여부를 확인하고, 도달했다면 손절
+            return processStopLoss(position, candle, feeRate);
+        }
+
+        // 청산가가 더 가까운 상황이라면 청산가 도달 여부를 확인하고, 도달했다면 청산 (liquidate())
+        return processLiquidation(position, candle, liquidationPrice, feeRate);
+    }
+
+    // 시가가 이미 강제 청산가를 넘었는지 판단
+    private boolean isLiquidatedAtOpen(OpenPosition position, Candle candle, double liquidationPrice) {
+        return switch (position.getSide()) {
+            case LONG -> candle.open() <= liquidationPrice;
+            case SHORT -> candle.open() >= liquidationPrice;
+        };
+    }
+
+    // 손절가가 청산가보다 가까운 위치에 있는지 판단
+    private boolean isStopBeforeLiquidation(OpenPosition position, double liquidationPrice) {
+        return switch (position.getSide()) {
+            case LONG -> position.getCurrentStopPrice() >= liquidationPrice;
+            case SHORT -> position.getCurrentStopPrice() <= liquidationPrice;
+        };
+    }
+
+    // 강제 청산을 처리하는 메서드
+    private double processLiquidation(OpenPosition position, Candle candle, double liquidationPrice, double feeRate) {
+        // 청산가에 도달했는지 먼저 확인
+        if (!isLiquidationReached(position, candle, liquidationPrice)) {
+            return 0.0;
+        }
+        // 도달했으면 강제 청산을 처리
+        return liquidate(
+                position,
+                candle,
+                liquidationPrice,
+                feeRate
+        );
+    }
+
+    // 청산가에 도달했는지 확인하는 메서드
+    private boolean isLiquidationReached(OpenPosition position, Candle candle, double liquidationPrice) {
+        return switch (position.getSide()) {
+            case LONG -> candle.low() <= liquidationPrice;
+            case SHORT -> candle.high() >= liquidationPrice;
+        };
+    }
+
+    // 청산가로 강제 청산 처리
+    private double liquidate(OpenPosition position, Candle candle, double liquidationPrice, double feeRate) {
+        BacktestExit exit = position.closeQuantity(
+                candle.openTimeMs(),
+                liquidationPrice,
+                position.getRemainingQuantity(),
+                feeRate,
+                ExitReason.LIQUIDATION
+        );
+        return exit.realizedPnl();
     }
 }
