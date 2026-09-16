@@ -116,4 +116,23 @@ class BacktestEngineTest {
         // 두 청산 가격을 수량에 따라 평균 낸 결과입니다.
         assertEquals(99.55, shortTrade.exitPrice(), DELTA);
     }
+
+    @Test
+    void 시가갭손절이SuperTrend청산보다우선한다() {
+        List<Candle> candles = List.of(
+                candle(0, 100.0, 101.0, 99.0, 100.0),
+                candle(1, 100.0, 101.0, 99.0, 100.0),
+                candle(2, 100.0, 100.0, 89.0, 90.0),
+                candle(3, 90.0, 111.0, 89.0, 110.0),
+                candle(4, 140.0, 141.0, 139.0, 140.0)
+        );
+
+        BacktestResult result = engine.run(candles, config(inactiveRiskManagement()));
+        assertEquals(1, result.totalTrades());
+
+        BacktestTrade trade = result.trades().get(0);
+        assertEquals(PositionSide.SHORT, trade.side());
+        assertEquals(ExitReason.STOP_LOSS, trade.exitReason());
+        assertEquals(140.0, trade.exitPrice(), DELTA);
+    }
 }

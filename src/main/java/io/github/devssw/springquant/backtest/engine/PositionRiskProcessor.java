@@ -122,12 +122,15 @@ final class PositionRiskProcessor {
     // =========== 강제 청산 =========== //
     // 손절과 강제 청산 순서 판단 메서드 (무엇이 먼저인지)
     private double processAdverseExit(OpenPosition position, Candle candle, double feeRate, int leverage) {
-        double liquidationPrice = liquidationPriceCalculator.calculate(position.getSide(), position.getEntryPrice(), leverage);
-        // 시가가 이미 청산가를 넘어섰는지 확인
-        if (isLiquidatedAtOpen(position, candle, liquidationPrice)) {
-            // 이미 넘어섰다면 강제 청산
-            return liquidate(position, candle, liquidationPrice, feeRate);
+        // 새로운 캔들의 시가가 이미 강제청산가나 손절가를 넘어섰는지 확인합니다. (강제 청산 우선)
+        double realizedPnl = processOpenSafetyExit(position, candle, feeRate, leverage);
+
+        // 포지션 남았는지 확인
+        if (position.isClosed()) {
+            return realizedPnl;
         }
+
+        double liquidationPrice = liquidationPriceCalculator.calculate(position.getSide(), position.getEntryPrice(), leverage);
 
         // 청산가에는 아직 닿지 않은 상황에서, 손절가와 강제 청산가 중 어느 가격이 더 가까운지 확인
         if (isStopBeforeLiquidation(position, liquidationPrice)) {
@@ -188,5 +191,43 @@ final class PositionRiskProcessor {
                 ExitReason.LIQUIDATION
         );
         return exit.realizedPnl();
+    }
+
+    // =========== =========== //
+
+    /**
+     * 새로운 캔들의 시가가 이미 강제청산가나 손절가를 넘어섰는지 확인합니다.
+     * 강제청산과 손절이 동시에 발생할 수 있다면 강제청산을 우선합니다.
+     */
+    double processOpenSafetyExit(OpenPosition position, Candle candle, double feeRate, int leverage) {
+        double liquidationPrice = liquidationPriceCalculator.calculate(position.getSide(), position.getEntryPrice(), leverage);
+        ExitReason exitReason;
+
+        // 시가가 이미 청산가를 넘어섰는지 확인 (강제 청산 우선)
+        if (isLiquidatedAtOpen(position, candle, liquidationPrice)) {
+            exitReason = ExitReason.LIQUIDATION;
+        } else if (isStoppedAtOpen(position, candle)) {
+            // 시가가 손절가를 넘었는지확인
+            exitReason = ExitReason.STOP_LOSS;
+        } else {
+            return 0.0;
+        }
+
+        BacktestExit exit = position.closeQuantity(
+                candle.openTimeMs(),
+                candle.open(),
+                position.getRemainingQuantity(),
+                feeRate,
+                exitReason
+        );
+
+        return exit.realizedPnl();
+    }
+
+    private boolean isStoppedAtOpen(OpenPosition position, Candle candle) {
+        return switch (position.getSide()) {
+            case LONG -> candle.open() <= position.getCurrentStopPrice();
+            case SHORT -> candle.open() >= position.getCurrentStopPrice();
+        };
     }
 }

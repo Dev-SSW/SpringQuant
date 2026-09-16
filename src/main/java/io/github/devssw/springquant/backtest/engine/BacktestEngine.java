@@ -106,6 +106,22 @@ public final class BacktestEngine {
                 continue;
             }
 
+            // 새 캔들의 시가가 이미 손절가 또는 강제청산가를 넘었다면
+            // SuperTrend 반전 청산보다 먼저 처리합니다.
+            if (openPosition != null) {
+                double realizedPnl = positionRiskProcessor.processOpenSafetyExit(openPosition, executionCandle, config.feeRate(), config.leverage());
+
+                balance += realizedPnl;
+
+                if (openPosition.isClosed()) {
+                    BacktestTrade completedTrade = completeTrade(openPosition, balance);
+                    trades.add(completedTrade);
+                    openPosition = null;
+                    // 시가 안전 청산이 발생한 캔들에서는 새로운 포지션에 다시 진입하지 않습니다.
+                    continue;
+                }
+            }
+
             // 현재 보유 중인 포지션과 반대되는 SuperTrend 전환 신호가 발생하면 청산합니다.
             if (openPosition != null && entrySignalEvaluator.shouldExitBySuperTrend(openPosition, superTrend)) {
                 // 내부적으로 포지션을 종료하고 손익을 계산합니다 (closePosition())
