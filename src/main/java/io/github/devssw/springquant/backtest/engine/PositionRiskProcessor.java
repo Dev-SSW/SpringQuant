@@ -13,16 +13,25 @@ final class PositionRiskProcessor {
      * 같은 캔들에서 손절과 익절이 모두 가능한 경우 손절을 먼저 처리합니다. (보수적인 테스트 결과를 확인하기 위함)
      */
     double process(OpenPosition position, Candle candle, double feeRate) {
-        // 손절가에 닿았는지 먼저 확인
-        double stopLossPnl = processStopLoss(position, candle, feeRate);
+        // 손절가에 닿았는지 먼저 확인 및 처리
+        double realizedPnl = processStopLoss(position, candle, feeRate);
 
+        // 포지션 남았는지 확인 1
         if (position.isClosed()) {
-            return stopLossPnl;
+            return realizedPnl;
         }
 
         // 분할 익절 실행
-        double takeProfitPnl = processTakeProfits(position, candle, feeRate);
-        return stopLossPnl + takeProfitPnl;
+        realizedPnl += processTakeProfits(position, candle, feeRate);
+
+        // 포지션 남았는지 확인 2
+        if (position.isClosed()) {
+            return realizedPnl;
+        }
+
+        // 본절 승격 처리 (moveStopToBreakEvenIfNeeded를 통해 손절가가 수정되면, BacktestEngine.java에서 다음 루프에 승격 처리가 완료됨)
+        moveStopToBreakEvenIfNeeded(position, candle);
+        return realizedPnl;
     }
 
     // 현재 캔들이 손절가에 도달했다면 남은 수량을 전부 청산
@@ -100,5 +109,12 @@ final class PositionRiskProcessor {
             case LONG -> candle.high() >= takeProfitPrice;
             case SHORT -> candle.low() <= takeProfitPrice;
         };
+    }
+
+    // 본절 승격 처리
+    private void moveStopToBreakEvenIfNeeded(OpenPosition position, Candle candle) {
+        if (position.shouldMoveStopToBreakEven(candle.high(), candle.low())) {
+            position.moveStopToBreakEven();
+        }
     }
 }

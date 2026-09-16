@@ -50,4 +50,32 @@ class PositionRiskProcessorTest {
         assertEquals(10.0, exit.quantity(), DELTA);
         assertEquals(ExitReason.STOP_LOSS, exit.exitReason());
     }
+
+    @Test
+    void 수익구간도달후다음캔들에서본전손절() {
+        RiskManagementConfig riskManagement = new RiskManagementConfig(10.0, List.of(new TakeProfitLevel(50.0, 1.0)), true, 5.0);
+
+        OpenPosition position = new OpenPosition(1000L, PositionSide.LONG, 100.0, 10.0, 0.0, riskManagement);
+
+        // 고가가 본전 손절 승격 기준인 105에 도달
+        Candle triggerCandle = new Candle(2000L, 100.0, 106.0, 95.0, 105.0);
+        double firstPnl = processor.process(position, triggerCandle, 0.0);
+
+        assertEquals(0.0, firstPnl, DELTA);
+        assertEquals(100.0, position.getCurrentStopPrice(), DELTA);
+        assertFalse(position.isClosed());
+
+        // 다음 캔들에서 변경된 손절가 100에 도달
+        Candle stopCandle = new Candle(3000L, 105.0, 106.0, 99.0, 100.0);
+        double secondPnl = processor.process(position, stopCandle, 0.0);
+
+        assertEquals(0.0, secondPnl, DELTA);
+        assertTrue(position.isClosed());
+        assertEquals(1, position.getExits().size());
+
+        BacktestExit exit = position.getExits().get(0);
+
+        assertEquals(100.0, exit.exitPrice(), DELTA);
+        assertEquals(ExitReason.STOP_LOSS, exit.exitReason());
+    }
 }
