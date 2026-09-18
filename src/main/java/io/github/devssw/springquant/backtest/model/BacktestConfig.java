@@ -1,5 +1,7 @@
 package io.github.devssw.springquant.backtest.model;
 
+import io.github.devssw.springquant.backtest.engine.LiquidationConfig;
+
 import java.util.Objects;
 
 // 백테스트에서 사용 할 설정 값을 저장합니다
@@ -27,7 +29,9 @@ public record BacktestConfig(
         boolean oneEntryPerTrend,
 
         // 위험관리설정 추가
-        RiskManagementConfig riskManagement
+        RiskManagementConfig riskManagement,
+        // 격리 증거금
+        LiquidationConfig liquidation
 ) {
     // initialBalance : 테스트를 위해 추가한 가상의 시작 금액
     // 나머지는 차례대로 수수료, 배율, 잔고의 몇 %를 사용할지
@@ -83,5 +87,7 @@ public record BacktestConfig(
         }
 
         Objects.requireNonNull(riskManagement, "riskManagement가 null이어서는 안됩니다.");
+
+        Objects.requireNonNull(liquidation, "liquidation이 null이어서는 안 됩니다.");
     }
 }

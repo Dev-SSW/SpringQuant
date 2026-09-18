@@ -31,6 +31,7 @@ public final class BacktestEngine {
                 side,
                 entryPrice,
                 quantity,
+                margin,
                 entryFee,
                 config.riskManagement()
         );
@@ -113,7 +114,7 @@ public final class BacktestEngine {
             // 새 캔들의 시가가 이미 손절가 또는 강제청산가를 넘었다면
             // SuperTrend 반전 청산보다 먼저 처리합니다.
             if (openPosition != null) {
-                double realizedPnl = positionRiskProcessor.processOpenSafetyExit(openPosition, executionCandle, config.feeRate(), config.slippageRate(), config.leverage());
+                double realizedPnl = positionRiskProcessor.processOpenSafetyExit(openPosition, executionCandle, config.feeRate(), config.slippageRate(), config.liquidation());
 
                 balance += realizedPnl;
 
@@ -175,7 +176,7 @@ public final class BacktestEngine {
                         executionCandle,
                         config.feeRate(),
                         config.slippageRate(),
-                        config.leverage()
+                        config.liquidation()
                 );
                 balance += realizedPnl;
                 // 마지막 익절 단계까지 실행되어 수량이 모두 청산된 경우

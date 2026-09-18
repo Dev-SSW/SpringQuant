@@ -33,24 +33,45 @@ final class OpenPosition {
     private int nextTakeProfitIndex;
     private boolean breakEvenApplied;
 
+    // 격리 증거금
+    private final double initialMargin;
+
     OpenPosition(
             long entryTimeMs,
             PositionSide side,
             double entryPrice,
             double quantity,
+            double initialMargin,
             double entryFee,
             RiskManagementConfig riskManagement
     ) {
+        if (!Double.isFinite(initialMargin) || initialMargin <= 0.0) {
+            throw new IllegalArgumentException("initialMargin은 0보다 큰 유한한 값이어야 합니다.");
+        }
+
         this.side = side;
         this.entryTimeMs = entryTimeMs;
         this.entryPrice = entryPrice;
         this.initialQuantity = quantity;
         this.remainingQuantity = quantity;
+        this.initialMargin = initialMargin;
         this.entryFee = entryFee;
         this.riskManagement = riskManagement;
         this.currentStopPrice = calculateInitialStopPrice();
         this.nextTakeProfitIndex = 0;
         this.breakEvenApplied = false;
+    }
+
+    // 남은 증거금을 계산하는 메서드입니다
+    double getRemainingMargin() {
+        if (isClosed()) {
+            return 0.0;
+        }
+
+        double remainingRatio =
+                remainingQuantity / initialQuantity;
+
+        return initialMargin * remainingRatio;
     }
 
     // 포지션의 일부/전체를 실제로 청산하는 메서드

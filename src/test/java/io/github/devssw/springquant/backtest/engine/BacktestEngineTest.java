@@ -1,5 +1,6 @@
 package io.github.devssw.springquant.backtest.engine;
 
+import io.github.devssw.springquant.backtest.BacktestTestFixtures;
 import io.github.devssw.springquant.backtest.model.*;
 import io.github.devssw.springquant.market.Candle;
 import org.junit.jupiter.api.Test;
@@ -27,11 +28,11 @@ class BacktestEngineTest {
     }
 
     private BacktestConfig config(RiskManagementConfig riskManagement, double slippageRate) {
-        return new BacktestConfig(10000.0, 0.0, slippageRate, 1, 0.1, 2, 2.0, 0.0, 2, 0.1, EntryMode.ST_FLIP, 0.0, 0.0, true, riskManagement);
+        return new BacktestConfig(10000.0, 0.0, slippageRate, 1, 0.1, 2, 2.0, 0.0, 2, 0.1, EntryMode.ST_FLIP, 0.0, 0.0, true, riskManagement, BacktestTestFixtures.liquidationConfig());
     }
 
     private BacktestConfig config(double slippageRate, RiskManagementConfig riskManagement) {
-        return new BacktestConfig(10000.0, 0.0, slippageRate, 1, 0.1, 2, 2.0, 0.0, 2, 0.1, EntryMode.ST_FLIP, 0.0, 0.0, true, riskManagement);
+        return new BacktestConfig(10000.0, 0.0, slippageRate, 1, 0.1, 2, 2.0, 0.0, 2, 0.1, EntryMode.ST_FLIP, 0.0, 0.0, true, riskManagement, BacktestTestFixtures.liquidationConfig());
     }
 
     // 기존 ST 테스트에서 청산관리설정이 개입하지 않도록 만들어 둔 설정 (손절, 익절 조건을 굉장히 멀리 둠)

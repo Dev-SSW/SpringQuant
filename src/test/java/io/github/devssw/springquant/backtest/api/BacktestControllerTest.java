@@ -35,7 +35,7 @@ class BacktestControllerTest {
 
     @Test
     void 백테스트실행응답() throws Exception {
-        BacktestConfig expectedConfig = new BacktestConfig(10000.0, 0.0004, 0.0, 1, 1.0, 10, 1.0, 0.0, 10, 1.0, EntryMode.MA_BOUNCE, 0.0, 0.0, true, BacktestTestFixtures.riskManagementConfig());
+        BacktestConfig expectedConfig = new BacktestConfig(10000.0, 0.0004, 0.0, 1, 1.0, 10, 1.0, 0.0, 10, 1.0, EntryMode.MA_BOUNCE, 0.0, 0.0, true, BacktestTestFixtures.riskManagementConfig(), BacktestTestFixtures.liquidationConfig());
         BacktestResult expectedResult = BacktestResult.from(10000.0, List.of());
 
         when(backtestService.run("BTCUSDT", "4h", 1000L, 10000L, expectedConfig)).thenReturn(expectedResult);
@@ -63,22 +63,15 @@ class BacktestControllerTest {
                   "oneEntryPerTrend": true,
                           "riskManagement": {
                             "stopLossPercent": 2.0,
-                            "takeProfitLevels": [
-                              {
-                                "targetPercent": 1.0,
-                                "closeRatio": 0.5
-                              },
-                              {
-                                "targetPercent": 2.0,
-                                "closeRatio": 0.3
-                              },
-                              {
-                                "targetPercent": 3.0,
-                                "closeRatio": 0.2
-                              }
-                            ],
+                            "takeProfitLevels": [{"targetPercent": 1.0,"closeRatio": 0.5},{"targetPercent": 2.0,"closeRatio": 0.3},{"targetPercent": 3.0,"closeRatio": 0.2}],
                             "moveStopToBreakEven": true,
                             "breakEvenTriggerPercent": 2.0
+                          },
+                          "liquidation": {
+                            "maintenanceMarginRate": 0.01,
+                            "maintenanceAmount": 0.0,
+                             "rejectEntryIfLiquidationBeforeStop": true,
+                             "stopBufferPercent": 0.0
                           }
                 }
                 """;
@@ -106,6 +99,7 @@ class BacktestControllerTest {
                   "endTimeMs": 10000,
                   "initialBalance": 10000.0,
                   "feeRate": 0.0004,
+                  "slippageRate": 0.0,
                   "leverage": 1,
                   "marginUsageRate": 1.00,
                   "bollingerPeriod": 10,
@@ -119,22 +113,15 @@ class BacktestControllerTest {
                   "oneEntryPerTrend": true,
                           "riskManagement": {
                             "stopLossPercent": 2.0,
-                            "takeProfitLevels": [
-                              {
-                                "targetPercent": 1.0,
-                                "closeRatio": 0.5
-                              },
-                              {
-                                "targetPercent": 2.0,
-                                "closeRatio": 0.3
-                              },
-                              {
-                                "targetPercent": 3.0,
-                                "closeRatio": 0.2
-                              }
-                            ],
+                            "takeProfitLevels": [{"targetPercent": 1.0,"closeRatio": 0.5},{"targetPercent": 2.0,"closeRatio": 0.3},{"targetPercent": 3.0,"closeRatio": 0.2}],
                             "moveStopToBreakEven": true,
                             "breakEvenTriggerPercent": 2.0
+                          },
+                          "liquidation": {
+                            "maintenanceMarginRate": 0.01,
+                            "maintenanceAmount": 0.0,
+                             "rejectEntryIfLiquidationBeforeStop": true,
+                             "stopBufferPercent": 0.0
                           }
                 }
                 """;

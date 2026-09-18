@@ -1,5 +1,6 @@
 package io.github.devssw.springquant.backtest.api;
 
+import io.github.devssw.springquant.backtest.engine.LiquidationConfig;
 import io.github.devssw.springquant.backtest.model.BacktestConfig;
 import io.github.devssw.springquant.backtest.model.EntryMode;
 import io.github.devssw.springquant.backtest.model.RiskManagementConfig;
@@ -33,7 +34,8 @@ public record BacktestRequest (
         @PositiveOrZero double bbTolerancePercent,
         boolean oneEntryPerTrend,
 
-        @NotNull @Valid RiskManagementConfig riskManagement
+        @NotNull @Valid RiskManagementConfig riskManagement,
+        @NotNull @Valid LiquidationConfig liquidation
 ) {
 
     public BacktestRequest {
@@ -58,7 +60,8 @@ public record BacktestRequest (
                     maTolerancePercent,
                     bbTolerancePercent,
                     oneEntryPerTrend,
-                    riskManagement
+                    riskManagement,
+                    liquidation
             );
         }
 }

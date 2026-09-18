@@ -30,7 +30,7 @@ class BacktestServiceTest {
     }
 
     private BacktestConfig createConfig() {
-        return new BacktestConfig(10000.0, 0.0004, 0.0, 1, 1.0, 10, 1.0, 0.0, 10, 1.0, EntryMode.MA_BOUNCE, 0.0, 0.0, true, BacktestTestFixtures.riskManagementConfig());
+        return new BacktestConfig(10000.0, 0.0004, 0.0, 1, 1.0, 10, 1.0, 0.0, 10, 1.0, EntryMode.MA_BOUNCE, 0.0, 0.0, true, BacktestTestFixtures.riskManagementConfig(), BacktestTestFixtures.liquidationConfig());
     }
 
     private Candle candle(long index, double price) {

@@ -1,5 +1,6 @@
 package io.github.devssw.springquant.backtest;
 
+import io.github.devssw.springquant.backtest.engine.LiquidationConfig;
 import io.github.devssw.springquant.backtest.model.RiskManagementConfig;
 import io.github.devssw.springquant.backtest.model.TakeProfitLevel;
 
@@ -20,5 +21,9 @@ public final class BacktestTestFixtures {
                 true,
                 2.0
         );
+    }
+
+    public static LiquidationConfig liquidationConfig() {
+        return new LiquidationConfig(0.01, 0.0, true, 0.0);
     }
 }

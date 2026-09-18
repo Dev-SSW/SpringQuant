@@ -14,9 +14,9 @@ final class PositionRiskProcessor {
      * 현재 캔들에서 발생한 위험관리 청산을 처리하고 실현 손익을 반환합니다.
      * 같은 캔들에서 손절과 익절이 모두 가능한 경우 손절을 먼저 처리합니다. (보수적인 테스트 결과를 확인하기 위함)
      */
-    double process(OpenPosition position, Candle candle, double feeRate, double slippageRate, int leverage) {
+    double process(OpenPosition position, Candle candle, double feeRate, double slippageRate, LiquidationConfig liquidation) {
         // 손절가/청산가에 닿았는지 먼저 확인 및 처리
-        double realizedPnl = processAdverseExit(position, candle, feeRate, slippageRate, leverage);
+        double realizedPnl = processAdverseExit(position, candle, feeRate, slippageRate, liquidation);
 
         // 포지션 남았는지 확인 1
         if (position.isClosed()) {
@@ -130,16 +130,17 @@ final class PositionRiskProcessor {
 
     // =========== 강제 청산 =========== //
     // 손절과 강제 청산 순서 판단 메서드 (무엇이 먼저인지)
-    private double processAdverseExit(OpenPosition position, Candle candle, double feeRate, double slippageRate, int leverage) {
+    private double processAdverseExit(OpenPosition position, Candle candle, double feeRate, double slippageRate, LiquidationConfig liquidation) {
         // 새로운 캔들의 시가가 이미 강제청산가나 손절가를 넘어섰는지 확인합니다. (강제 청산 우선)
-        double realizedPnl = processOpenSafetyExit(position, candle, feeRate, slippageRate, leverage);
+        double realizedPnl = processOpenSafetyExit(position, candle, feeRate, slippageRate, liquidation);
 
         // 포지션 남았는지 확인
         if (position.isClosed()) {
             return realizedPnl;
         }
 
-        double liquidationPrice = liquidationPriceCalculator.calculate(position.getSide(), position.getEntryPrice(), leverage);
+        // 청산가 계산
+        double liquidationPrice = calculateLiquidationPrice(position, liquidation);
 
         // 청산가에는 아직 닿지 않은 상황에서, 손절가와 강제 청산가 중 어느 가격이 더 가까운지 확인
         if (isStopBeforeLiquidation(position, liquidationPrice)) {
@@ -208,8 +209,8 @@ final class PositionRiskProcessor {
      * 새로운 캔들의 시가가 이미 강제청산가나 손절가를 넘어섰는지 확인합니다.
      * 강제청산과 손절이 동시에 발생할 수 있다면 강제청산을 우선합니다.
      */
-    double processOpenSafetyExit(OpenPosition position, Candle candle, double feeRate, double slippageRate, int leverage) {
-        double liquidationPrice = liquidationPriceCalculator.calculate(position.getSide(), position.getEntryPrice(), leverage);
+    double processOpenSafetyExit(OpenPosition position, Candle candle, double feeRate, double slippageRate, LiquidationConfig liquidation) {
+        double liquidationPrice = calculateLiquidationPrice(position, liquidation);
         ExitReason exitReason;
 
         // 시가가 이미 청산가를 넘어섰는지 확인 (강제 청산 우선)
@@ -245,5 +246,16 @@ final class PositionRiskProcessor {
             case LONG -> candle.open() <= position.getCurrentStopPrice();
             case SHORT -> candle.open() >= position.getCurrentStopPrice();
         };
+    }
+
+    // 강제 청산가 계산 메서드
+    private double calculateLiquidationPrice(OpenPosition position, LiquidationConfig liquidation) {
+        return liquidationPriceCalculator.calculate(
+                position.getSide(),
+                position.getEntryPrice(),
+                position.getRemainingQuantity(),
+                position.getRemainingMargin(),
+                liquidation
+        );
     }
 }
