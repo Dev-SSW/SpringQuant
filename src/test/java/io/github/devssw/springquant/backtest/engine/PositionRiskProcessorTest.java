@@ -25,7 +25,7 @@ class PositionRiskProcessorTest {
         // 진입가 100에 진입 수량은 10 => 총 가치는 1000, 손절 비율이 10%이므로 손절이 발생 할 시 -100의 손해가 생김 (아래의 숏 테스트도 동일한 조건)
         OpenPosition position = new OpenPosition(1000L, PositionSide.LONG, 100.0, 10.0, 0.0, riskManagement());
         Candle candle = new Candle(2000L, 100.0, 105.0, 89.0, 95.0);
-        double realizedPnl = processor.process(position, candle, 0.0, 1);
+        double realizedPnl = processor.process(position, candle, 0.0, 0.0, 1);
         assertTrue(position.isClosed());
         assertEquals(-100.0, realizedPnl, DELTA);
         assertEquals(1, position.getExits().size());
@@ -40,7 +40,7 @@ class PositionRiskProcessorTest {
     void 숏포지션손절() {
         OpenPosition position = new OpenPosition(1000L, PositionSide.SHORT, 100.0, 10.0, 0.0, riskManagement());
         Candle candle = new Candle(2000L, 100.0, 111.0, 95.0, 105.0);
-        double realizedPnl = processor.process(position, candle, 0.0, 1);
+        double realizedPnl = processor.process(position, candle, 0.0, 0.0, 1);
         assertTrue(position.isClosed());
         assertEquals(-100.0, realizedPnl, DELTA);
         assertEquals(1, position.getExits().size());
@@ -59,7 +59,7 @@ class PositionRiskProcessorTest {
 
         // 고가가 본전 손절 승격 기준인 105에 도달
         Candle triggerCandle = new Candle(2000L, 100.0, 106.0, 95.0, 105.0);
-        double firstPnl = processor.process(position, triggerCandle, 0.0, 1);
+        double firstPnl = processor.process(position, triggerCandle, 0.0, 0.0, 1);
 
         assertEquals(0.0, firstPnl, DELTA);
         assertEquals(100.0, position.getCurrentStopPrice(), DELTA);
@@ -67,7 +67,7 @@ class PositionRiskProcessorTest {
 
         // 다음 캔들에서 변경된 손절가 100에 도달
         Candle stopCandle = new Candle(3000L, 105.0, 106.0, 99.0, 100.0);
-        double secondPnl = processor.process(position, stopCandle, 0.0, 1);
+        double secondPnl = processor.process(position, stopCandle, 0.0, 0.0, 1);
 
         assertEquals(0.0, secondPnl, DELTA);
         assertTrue(position.isClosed());
@@ -86,7 +86,7 @@ class PositionRiskProcessorTest {
         OpenPosition position = new OpenPosition(1000L, PositionSide.LONG, 100.0, 10.0, 0.0, riskManagement);
         Candle candle = new Candle(2000L, 100.0, 101.0, 89.0, 90.0);
 
-        double realizedPnl = processor.process(position, candle, 0.0, 10);
+        double realizedPnl = processor.process(position, candle, 0.0, 0.0, 10);
 
         assertTrue(position.isClosed());
         assertEquals(-100.0, realizedPnl, DELTA);

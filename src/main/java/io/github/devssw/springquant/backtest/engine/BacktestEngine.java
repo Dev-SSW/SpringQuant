@@ -16,10 +16,11 @@ import java.util.Objects;
 public final class BacktestEngine {
     private final EntrySignalEvaluator entrySignalEvaluator = new EntrySignalEvaluator();
     private final PositionRiskProcessor positionRiskProcessor = new PositionRiskProcessor();
-
+    private final ExecutionPriceCalculator executionPriceCalculator = new ExecutionPriceCalculator();
     // 가상 포지션 생성
     private OpenPosition enterPosition(Candle candle, PositionSide side, double balance, BacktestConfig config) {
-        double entryPrice = candle.open();
+        // 진입 가격은 슬리피지를 포함하여 계산
+        double entryPrice = executionPriceCalculator.entryPrice(side, candle.open(), config.slippageRate());
         double margin = balance * config.marginUsageRate();
         double notional = margin * config.leverage();
         double quantity = notional / entryPrice;
@@ -56,11 +57,14 @@ public final class BacktestEngine {
     private BacktestTrade closePosition(
             OpenPosition position,
             long exitTimeMs,
-            double exitPrice,
+            double marketPrice,
             double currentBalance,
             double feeRate,
+            double slippageRate,
             ExitReason exitReason
     ) {
+        double exitPrice = executionPriceCalculator.exitPrice(position.getSide(), marketPrice, slippageRate, exitReason);
+
         BacktestExit exit = position.closeQuantity(
                 exitTimeMs,
                 exitPrice,
@@ -109,7 +113,7 @@ public final class BacktestEngine {
             // 새 캔들의 시가가 이미 손절가 또는 강제청산가를 넘었다면
             // SuperTrend 반전 청산보다 먼저 처리합니다.
             if (openPosition != null) {
-                double realizedPnl = positionRiskProcessor.processOpenSafetyExit(openPosition, executionCandle, config.feeRate(), config.leverage());
+                double realizedPnl = positionRiskProcessor.processOpenSafetyExit(openPosition, executionCandle, config.feeRate(), config.slippageRate(), config.leverage());
 
                 balance += realizedPnl;
 
@@ -131,6 +135,7 @@ public final class BacktestEngine {
                         executionCandle.open(),
                         balance,
                         config.feeRate(),
+                        config.slippageRate(),
                         ExitReason.SUPER_TREND
                 );
                 // 청산 후 완료된 거래의 손익을 계산하고, 반환합니다.
@@ -169,6 +174,7 @@ public final class BacktestEngine {
                         openPosition,
                         executionCandle,
                         config.feeRate(),
+                        config.slippageRate(),
                         config.leverage()
                 );
                 balance += realizedPnl;
@@ -190,6 +196,7 @@ public final class BacktestEngine {
                     lastCandle.close(),
                     balance,
                     config.feeRate(),
+                    config.slippageRate(),
                     ExitReason.END_OF_DATA
             );
             trades.add(completedTrade);

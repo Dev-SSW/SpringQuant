@@ -23,7 +23,15 @@ class BacktestEngineTest {
 
     // 청산 관리 설정
     private BacktestConfig config(RiskManagementConfig riskManagement) {
-        return new BacktestConfig(10000.0, 0.0, 1, 0.1, 2, 2.0, 0.0, 2, 0.1, EntryMode.ST_FLIP, 0.0, 0.0, true, riskManagement);
+        return config(0.0, riskManagement);
+    }
+
+    private BacktestConfig config(RiskManagementConfig riskManagement, double slippageRate) {
+        return new BacktestConfig(10000.0, 0.0, slippageRate, 1, 0.1, 2, 2.0, 0.0, 2, 0.1, EntryMode.ST_FLIP, 0.0, 0.0, true, riskManagement);
+    }
+
+    private BacktestConfig config(double slippageRate, RiskManagementConfig riskManagement) {
+        return new BacktestConfig(10000.0, 0.0, slippageRate, 1, 0.1, 2, 2.0, 0.0, 2, 0.1, EntryMode.ST_FLIP, 0.0, 0.0, true, riskManagement);
     }
 
     // 기존 ST 테스트에서 청산관리설정이 개입하지 않도록 만들어 둔 설정 (손절, 익절 조건을 굉장히 멀리 둠)
@@ -86,6 +94,33 @@ class BacktestEngineTest {
     }
 
     @Test
+    void slippageAppliesToEntryAndRegularExits() {
+        List<Candle> candles = List.of(
+                candle(0, 100.0, 101.0, 99.0, 100.0),
+                candle(1, 100.0, 101.0, 99.0, 100.0),
+                candle(2, 100.0, 100.0, 89.0, 90.0),
+                candle(3, 90.0, 111.0, 89.0, 110.0),
+                candle(4, 110.0, 111.0, 109.0, 110.0)
+        );
+
+        BacktestResult result = engine.run(candles, config(0.01, inactiveRiskManagement()));
+
+        assertEquals(2, result.totalTrades());
+
+        BacktestTrade shortTrade = result.trades().get(0);
+        assertEquals(PositionSide.SHORT, shortTrade.side());
+        assertEquals(89.1, shortTrade.entryPrice(), DELTA);
+        assertEquals(111.1, shortTrade.exitPrice(), DELTA);
+        assertEquals(ExitReason.SUPER_TREND, shortTrade.exitReason());
+
+        BacktestTrade longTrade = result.trades().get(1);
+        assertEquals(PositionSide.LONG, longTrade.side());
+        assertEquals(111.1, longTrade.entryPrice(), DELTA);
+        assertEquals(108.9, longTrade.exitPrice(), DELTA);
+        assertEquals(ExitReason.END_OF_DATA, longTrade.exitReason());
+    }
+
+    @Test
     void 일부익절후나머지수량을ST전환으로청산() {
         List<Candle> candles = List.of(
                 candle(0, 100.0, 101.0, 99.0, 100.0),
@@ -134,5 +169,24 @@ class BacktestEngineTest {
         assertEquals(PositionSide.SHORT, trade.side());
         assertEquals(ExitReason.STOP_LOSS, trade.exitReason());
         assertEquals(140.0, trade.exitPrice(), DELTA);
+    }
+
+    @Test
+    void 진입과청산에슬리피지를적용() {
+        List<Candle> candles = List.of(
+                candle(0, 100.0, 101.0, 99.0, 100.0),
+                candle(1, 100.0, 101.0, 99.0, 100.0),
+                candle(2, 100.0, 100.0, 89.0, 90.0),
+                candle(3, 90.0, 111.0, 89.0, 110.0),
+                candle(4, 110.0, 111.0, 109.0, 110.0)
+        );
+
+        BacktestResult result = engine.run(candles, config(inactiveRiskManagement(), 0.01));
+
+        BacktestTrade shortTrade = result.trades().get(0);
+
+        assertEquals(89.1, shortTrade.entryPrice(), DELTA);
+        assertEquals(111.1, shortTrade.exitPrice(), DELTA);
+        assertEquals(ExitReason.SUPER_TREND, shortTrade.exitReason());
     }
 }

@@ -9,13 +9,14 @@ import io.github.devssw.springquant.market.Candle;
 // BacktestEngine에서 분리 - 보유 중인 포지션의 익절, 손절 등 위험관리 조건을 처리
 final class PositionRiskProcessor {
     private final LiquidationPriceCalculator liquidationPriceCalculator = new LiquidationPriceCalculator();
+    private final ExecutionPriceCalculator executionPriceCalculator = new ExecutionPriceCalculator();
     /**
      * 현재 캔들에서 발생한 위험관리 청산을 처리하고 실현 손익을 반환합니다.
      * 같은 캔들에서 손절과 익절이 모두 가능한 경우 손절을 먼저 처리합니다. (보수적인 테스트 결과를 확인하기 위함)
      */
-    double process(OpenPosition position, Candle candle, double feeRate, int leverage) {
+    double process(OpenPosition position, Candle candle, double feeRate, double slippageRate, int leverage) {
         // 손절가/청산가에 닿았는지 먼저 확인 및 처리
-        double realizedPnl = processAdverseExit(position, candle, feeRate, leverage);
+        double realizedPnl = processAdverseExit(position, candle, feeRate, slippageRate, leverage);
 
         // 포지션 남았는지 확인 1
         if (position.isClosed()) {
@@ -23,7 +24,7 @@ final class PositionRiskProcessor {
         }
 
         // 분할 익절 실행
-        realizedPnl += processTakeProfits(position, candle, feeRate);
+        realizedPnl += processTakeProfits(position, candle, feeRate, slippageRate);
 
         // 포지션 남았는지 확인 2
         if (position.isClosed()) {
@@ -36,12 +37,18 @@ final class PositionRiskProcessor {
     }
 
     // 현재 캔들이 손절가에 도달했다면 남은 수량을 전부 청산
-    private double processStopLoss(OpenPosition position, Candle candle, double feeRate) {
+    private double processStopLoss(OpenPosition position, Candle candle, double feeRate, double slippageRate) {
         if (!isStopLossReached(position, candle)) {
             return 0.0;
         }
+        double marketPrice = stopLossExecutionPrice(position, candle);
 
-        double exitPrice = stopLossExecutionPrice(position, candle);
+        double exitPrice = executionPriceCalculator.exitPrice(
+                position.getSide(),
+                marketPrice,
+                slippageRate,
+                ExitReason.STOP_LOSS
+        );
 
         BacktestExit exit = position.closeQuantity(
                 candle.openTimeMs(),
@@ -76,7 +83,7 @@ final class PositionRiskProcessor {
     }
 
     // 현재 캔들에서 도달한 익절 단계를 순서대로 처리
-    private double processTakeProfits(OpenPosition position, Candle candle, double feeRate) {
+    private double processTakeProfits(OpenPosition position, Candle candle, double feeRate, double slippageRate) {
         double realizedPnl = 0.0;
         // 다음 익절 단계가 남아있는 동안 실행
         while (position.hasNextTakeProfit()) {
@@ -88,10 +95,12 @@ final class PositionRiskProcessor {
             if (!isTakeProfitReached(position, candle, takeProfitPrice)) {
                 break;
             }
+            double exitPrice = executionPriceCalculator.exitPrice(position.getSide(), takeProfitPrice, slippageRate, ExitReason.TAKE_PROFIT);
+
             // 설정 청산 수량을 조회하고 계산
             double quantity = position.takeProfitQuantity(level);
             // 포지션 청산 메서드
-            BacktestExit exit = position.closeQuantity(candle.openTimeMs(), takeProfitPrice, quantity, feeRate, ExitReason.TAKE_PROFIT);
+            BacktestExit exit = position.closeQuantity(candle.openTimeMs(), exitPrice, quantity, feeRate, ExitReason.TAKE_PROFIT);
             // 다음 익절 단계로 인덱스 변경
             position.completeTakeProfitLevel();
             // 실제 손익 계산
@@ -121,9 +130,9 @@ final class PositionRiskProcessor {
 
     // =========== 강제 청산 =========== //
     // 손절과 강제 청산 순서 판단 메서드 (무엇이 먼저인지)
-    private double processAdverseExit(OpenPosition position, Candle candle, double feeRate, int leverage) {
+    private double processAdverseExit(OpenPosition position, Candle candle, double feeRate, double slippageRate, int leverage) {
         // 새로운 캔들의 시가가 이미 강제청산가나 손절가를 넘어섰는지 확인합니다. (강제 청산 우선)
-        double realizedPnl = processOpenSafetyExit(position, candle, feeRate, leverage);
+        double realizedPnl = processOpenSafetyExit(position, candle, feeRate, slippageRate, leverage);
 
         // 포지션 남았는지 확인
         if (position.isClosed()) {
@@ -135,7 +144,7 @@ final class PositionRiskProcessor {
         // 청산가에는 아직 닿지 않은 상황에서, 손절가와 강제 청산가 중 어느 가격이 더 가까운지 확인
         if (isStopBeforeLiquidation(position, liquidationPrice)) {
             // 손절가가 가까운 상황이라면 손절 도달 여부를 확인하고, 도달했다면 손절
-            return processStopLoss(position, candle, feeRate);
+            return processStopLoss(position, candle, feeRate, slippageRate);
         }
 
         // 청산가가 더 가까운 상황이라면 청산가 도달 여부를 확인하고, 도달했다면 청산 (liquidate())
@@ -199,7 +208,7 @@ final class PositionRiskProcessor {
      * 새로운 캔들의 시가가 이미 강제청산가나 손절가를 넘어섰는지 확인합니다.
      * 강제청산과 손절이 동시에 발생할 수 있다면 강제청산을 우선합니다.
      */
-    double processOpenSafetyExit(OpenPosition position, Candle candle, double feeRate, int leverage) {
+    double processOpenSafetyExit(OpenPosition position, Candle candle, double feeRate, double slippageRate, int leverage) {
         double liquidationPrice = liquidationPriceCalculator.calculate(position.getSide(), position.getEntryPrice(), leverage);
         ExitReason exitReason;
 
@@ -213,9 +222,16 @@ final class PositionRiskProcessor {
             return 0.0;
         }
 
+        double exitPrice = executionPriceCalculator.exitPrice(
+                position.getSide(),
+                candle.open(),
+                slippageRate,
+                exitReason
+        );
+
         BacktestExit exit = position.closeQuantity(
                 candle.openTimeMs(),
-                candle.open(),
+                exitPrice,
                 position.getRemainingQuantity(),
                 feeRate,
                 exitReason

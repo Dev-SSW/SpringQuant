@@ -6,6 +6,7 @@ import java.util.Objects;
 public record BacktestConfig(
         double initialBalance,
         double feeRate,
+        double slippageRate,
         int leverage,
         double marginUsageRate,
 
@@ -37,6 +38,10 @@ public record BacktestConfig(
 
         if (!Double.isFinite(feeRate) || feeRate < 0.0 || feeRate >= 1.0) {
             throw new IllegalArgumentException("수수료는 적어도 0과 1 사이여야 합니다.");
+        }
+
+        if (!Double.isFinite(slippageRate) || slippageRate < 0.0 || slippageRate >= 1.0) {
+            throw new IllegalArgumentException("slippageRate는 0 이상 1 미만이어야 합니다.");
         }
 
         if (leverage <= 0) {

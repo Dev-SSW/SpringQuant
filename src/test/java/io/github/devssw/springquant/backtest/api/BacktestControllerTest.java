@@ -35,7 +35,7 @@ class BacktestControllerTest {
 
     @Test
     void 백테스트실행응답() throws Exception {
-        BacktestConfig expectedConfig = new BacktestConfig(10000.0, 0.0004, 1, 1.0, 10, 1.0, 0.0, 10, 1.0, EntryMode.MA_BOUNCE, 0.0, 0.0, true, BacktestTestFixtures.riskManagementConfig());
+        BacktestConfig expectedConfig = new BacktestConfig(10000.0, 0.0004, 0.0, 1, 1.0, 10, 1.0, 0.0, 10, 1.0, EntryMode.MA_BOUNCE, 0.0, 0.0, true, BacktestTestFixtures.riskManagementConfig());
         BacktestResult expectedResult = BacktestResult.from(10000.0, List.of());
 
         when(backtestService.run("BTCUSDT", "4h", 1000L, 10000L, expectedConfig)).thenReturn(expectedResult);
@@ -49,6 +49,7 @@ class BacktestControllerTest {
                   "endTimeMs": 10000,
                   "initialBalance": 10000.0,
                   "feeRate": 0.0004,
+                  "slippageRate": 0.0,
                   "leverage": 1,
                   "marginUsageRate": 1.00,
                   "bollingerPeriod": 10,

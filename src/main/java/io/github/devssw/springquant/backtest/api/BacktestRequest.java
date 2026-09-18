@@ -15,6 +15,7 @@ public record BacktestRequest (
         // 시작 잔고, 수수료(0이상0, 레버리지(최소1), 잔고 사용 비율 (최소 0 - 최대 1)
         @Positive double initialBalance,
         @PositiveOrZero double feeRate,
+        @PositiveOrZero @DecimalMax(value = "1.0", inclusive = false) double slippageRate,
         @Min(1) int leverage,
         @DecimalMin(value = "0.0", inclusive = false)
         @DecimalMax("1.0")
@@ -45,6 +46,7 @@ public record BacktestRequest (
             return new BacktestConfig(
                     initialBalance,
                     feeRate,
+                    slippageRate,
                     leverage,
                     marginUsageRate,
                     bollingerPeriod,
