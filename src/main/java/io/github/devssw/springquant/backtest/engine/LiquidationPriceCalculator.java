@@ -24,14 +24,18 @@ final class LiquidationPriceCalculator {
             throw new IllegalArgumentException("isolatedMargin은 0보다 큰 유한한 값이어야 합니다.");
         }
 
+        // 거래소에 따라 수량이 음수 표시일 수 있으니 절대값으로
         double absoluteQuantity = Math.abs(quantity);
+        // 유지 증거금률 조회
         double maintenanceMarginRate = config.maintenanceMarginRate();
 
+        // 유지 증거금률을 포함한 청산가 공식의 분모 계산
         double denominator = switch (side) {
             case LONG -> absoluteQuantity * (1.0 - maintenanceMarginRate);
             case SHORT -> absoluteQuantity * (1.0 + maintenanceMarginRate);
         };
 
+        // (남은 수량 * 진입가 - 격리 증거금 - 유지 증거금 계산에 들어가는 보정 금액) / 청산가를 구하기 위한 분모
         double liquidationPrice = switch (side) {
             case LONG -> (absoluteQuantity * entryPrice - isolatedMargin - config.maintenanceAmount()) / denominator;
             case SHORT -> (absoluteQuantity * entryPrice + isolatedMargin + config.maintenanceAmount()) / denominator;
