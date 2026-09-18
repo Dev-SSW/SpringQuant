@@ -15,9 +15,11 @@ public record BacktestTrade (
         List<BacktestExit> exits,
         double balanceAfter
 ) {
+    // ==================== 검증 기준 ====================
     private static final double QUANTITY_TOLERANCE = 1e-9;
 
     // 청산 시각의 유효성 확인 / 총 청산 수량이 최초 진입 수량과 일치하는지 검증
+    // ==================== 청산 이력 검증 ====================
     private static void validateExits(long entryTimeMs, double quantity, List<BacktestExit> exits) {
         long previousExitTimeMs = entryTimeMs;
         double closedQuantity = 0.0;
@@ -42,6 +44,7 @@ public record BacktestTrade (
         }
     }
 
+    // ==================== 생성 및 필드 검증 ====================
     public BacktestTrade {
             if (entryTimeMs < 0L) {
                 throw new IllegalArgumentException("entryTimeMs는 0 이상이어야 합니다.");
@@ -76,6 +79,7 @@ public record BacktestTrade (
     }
 
     // 가격 변화로 발생한 수수료 차감 전 손익입니다.
+    // ==================== 손익/수수료 집계 ====================
     public double grossPnl() {
         return exits.stream()
                 .mapToDouble(BacktestExit::grossPnl)
@@ -100,6 +104,7 @@ public record BacktestTrade (
     }
 
     // 청산 시각
+    // ==================== 거래 종료 정보 ====================
     public long exitTimeMs() {
         return lastExit().exitTimeMs();
     }
@@ -128,6 +133,7 @@ public record BacktestTrade (
     }
 
     // 마지막 청산
+    // ==================== 내부 헬퍼 ====================
     private BacktestExit lastExit() {
         return exits.get(exits.size() - 1);
     }

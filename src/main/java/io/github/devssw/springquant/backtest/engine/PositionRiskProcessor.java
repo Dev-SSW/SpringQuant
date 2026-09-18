@@ -8,8 +8,11 @@ import io.github.devssw.springquant.market.Candle;
 
 // BacktestEngine에서 분리 - 보유 중인 포지션의 익절, 손절 등 위험관리 조건을 처리
 final class PositionRiskProcessor {
+    // ==================== 의존 객체 ====================
     private final LiquidationPriceCalculator liquidationPriceCalculator = new LiquidationPriceCalculator();
     private final ExecutionPriceCalculator executionPriceCalculator = new ExecutionPriceCalculator();
+
+    // ==================== 위험관리 처리 진입점 ====================
     /**
      * 현재 캔들에서 발생한 위험관리 청산을 처리하고 실현 손익을 반환합니다.
      * 같은 캔들에서 손절과 익절이 모두 가능한 경우 손절을 먼저 처리합니다. (보수적인 테스트 결과를 확인하기 위함)
@@ -37,6 +40,7 @@ final class PositionRiskProcessor {
     }
 
     // 현재 캔들이 손절가에 도달했다면 남은 수량을 전부 청산
+    // ==================== 손절 처리 ====================
     private double processStopLoss(OpenPosition position, Candle candle, double feeRate, double slippageRate) {
         if (!isStopLossReached(position, candle)) {
             return 0.0;
@@ -66,6 +70,7 @@ final class PositionRiskProcessor {
      * 롱: 시가가 손절가보다 낮으면 더 낮은 시가로 청산
      * 숏: 시가가 손절가보다 높으면 더 높은 시가로 청산
      */
+    // ==================== 손절 가격/도달 판단 ====================
     private double stopLossExecutionPrice(OpenPosition position, Candle candle) {
         double stopPrice = position.getCurrentStopPrice();
 
@@ -83,6 +88,7 @@ final class PositionRiskProcessor {
     }
 
     // 현재 캔들에서 도달한 익절 단계를 순서대로 처리
+    // ==================== 익절 처리 ====================
     private double processTakeProfits(OpenPosition position, Candle candle, double feeRate, double slippageRate) {
         double realizedPnl = 0.0;
         // 다음 익절 단계가 남아있는 동안 실행
@@ -122,6 +128,7 @@ final class PositionRiskProcessor {
     }
 
     // 본절 승격 처리
+    // ==================== 본전 손절 처리 ====================
     private void moveStopToBreakEvenIfNeeded(OpenPosition position, Candle candle) {
         if (position.shouldMoveStopToBreakEven(candle.high(), candle.low())) {
             position.moveStopToBreakEven();
@@ -130,6 +137,7 @@ final class PositionRiskProcessor {
 
     // =========== 강제 청산 =========== //
     // 손절과 강제 청산 순서 판단 메서드 (무엇이 먼저인지)
+    // ==================== 손절/강제청산 우선순위 처리 ====================
     private double processAdverseExit(OpenPosition position, Candle candle, double feeRate, double slippageRate, LiquidationConfig liquidation) {
         // 새로운 캔들의 시가가 이미 강제청산가나 손절가를 넘어섰는지 확인합니다. (강제 청산 우선)
         double realizedPnl = processOpenSafetyExit(position, candle, feeRate, slippageRate, liquidation);
@@ -153,6 +161,7 @@ final class PositionRiskProcessor {
     }
 
     // 시가가 이미 강제 청산가를 넘었는지 판단
+    // ==================== 강제청산 도달 판단 ====================
     private boolean isLiquidatedAtOpen(OpenPosition position, Candle candle, double liquidationPrice) {
         return switch (position.getSide()) {
             case LONG -> candle.open() <= liquidationPrice;
@@ -169,6 +178,7 @@ final class PositionRiskProcessor {
     }
 
     // 강제 청산을 처리하는 메서드
+    // ==================== 강제청산 실행 ====================
     private double processLiquidation(OpenPosition position, Candle candle, double liquidationPrice, double feeRate) {
         // 청산가에 도달했는지 먼저 확인
         if (!isLiquidationReached(position, candle, liquidationPrice)) {
@@ -209,6 +219,7 @@ final class PositionRiskProcessor {
      * 새로운 캔들의 시가가 이미 강제청산가나 손절가를 넘어섰는지 확인합니다.
      * 강제청산과 손절이 동시에 발생할 수 있다면 강제청산을 우선합니다.
      */
+    // ==================== 시가 안전 청산 ====================
     double processOpenSafetyExit(OpenPosition position, Candle candle, double feeRate, double slippageRate, LiquidationConfig liquidation) {
         double liquidationPrice = calculateLiquidationPrice(position, liquidation);
         ExitReason exitReason;
@@ -241,6 +252,7 @@ final class PositionRiskProcessor {
         return exit.realizedPnl();
     }
 
+    // ==================== 시가 안전 청산 판단 헬퍼 ====================
     private boolean isStoppedAtOpen(OpenPosition position, Candle candle) {
         return switch (position.getSide()) {
             case LONG -> candle.open() <= position.getCurrentStopPrice();
@@ -249,6 +261,7 @@ final class PositionRiskProcessor {
     }
 
     // 강제 청산가 계산 메서드
+    // ==================== 청산가 계산 ====================
     private double calculateLiquidationPrice(OpenPosition position, LiquidationConfig liquidation) {
         return liquidationPriceCalculator.calculate(
                 position.getSide(),

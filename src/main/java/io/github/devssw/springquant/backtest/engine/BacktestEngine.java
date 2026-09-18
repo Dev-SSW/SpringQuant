@@ -14,9 +14,12 @@ import java.util.Objects;
 
 @Service
 public final class BacktestEngine {
+    // ==================== 의존 객체 ====================
     private final EntrySignalEvaluator entrySignalEvaluator = new EntrySignalEvaluator();
     private final PositionRiskProcessor positionRiskProcessor = new PositionRiskProcessor();
     private final ExecutionPriceCalculator executionPriceCalculator = new ExecutionPriceCalculator();
+
+    // ==================== 포지션 생성/완료 헬퍼 ====================
     // 가상 포지션 생성
     private OpenPosition enterPosition(Candle candle, PositionSide side, double balance, BacktestConfig config) {
         // 진입 가격은 슬리피지를 포함하여 계산
@@ -78,6 +81,7 @@ public final class BacktestEngine {
         return completeTrade(position, balanceAfter);
     }
 
+    // ==================== 백테스트 실행 ====================
     // 백테스트 전체 실행
     public BacktestResult run(List<Candle> candles, BacktestConfig config) {
         Objects.requireNonNull(candles, "candles이 null이면 안됩니다.");
@@ -98,6 +102,7 @@ public final class BacktestEngine {
         long lastEnteredTrendId = -1L;
 
         // 캔들을 시간 순서대로 조회합니다
+        // ==================== 캔들 순회 및 신호 실행 ====================
         for (int i = 1; i < candles.size(); i++) {
             // 현재 캔들입니다 (i)
             Candle executionCandle = candles.get(i);
@@ -113,6 +118,7 @@ public final class BacktestEngine {
 
             // 새 캔들의 시가가 이미 손절가 또는 강제청산가를 넘었다면
             // SuperTrend 반전 청산보다 먼저 처리합니다.
+            // ==================== 시가 안전 청산 ====================
             if (openPosition != null) {
                 double realizedPnl = positionRiskProcessor.processOpenSafetyExit(openPosition, executionCandle, config.feeRate(), config.slippageRate(), config.liquidation());
 
@@ -128,6 +134,7 @@ public final class BacktestEngine {
             }
 
             // 현재 보유 중인 포지션과 반대되는 SuperTrend 전환 신호가 발생하면 청산합니다.
+            // ==================== SuperTrend 반전 청산 ====================
             if (openPosition != null && entrySignalEvaluator.shouldExitBySuperTrend(openPosition, superTrend)) {
                 // 내부적으로 포지션을 종료하고 손익을 계산합니다 (closePosition())
                 BacktestTrade completedTrade = closePosition(
@@ -150,6 +157,7 @@ public final class BacktestEngine {
             // Direction이 Long으로 바뀌면, Signal은 처음에 Long을 반환합니다. 그리고 Direction이 다시 바뀌기 전까지는 None 상태를 유지합니다
             // 아직 Direction이 유지중이라면, 조건을 충족하는 순간 (determineEntrySide) PositionSide가 진입을 시도합니다
             // 보유중인 상황에서 Direction의 추세가 바뀌면, Signal은  Short를 반환하고, PositionSide는 청산됩니다
+            // ==================== 신규 진입 판단 ====================
             PositionSide entrySide = entrySignalEvaluator.determineEntrySide(signalCandle, band, superTrend, config);
             // oneEntryPerTrend()는 추세 당 한 번의 진입만을 허용할지 말지에 대한 설정입니다. True이면 추세 당 한 번만 허용합니다.
             // trendid는 추세가 바뀌면 증가하는 추세 번호입니다. 해당 추세 번호가 마지막 추세 번호와 같다면, 같은 추세에서 이미 한 번 진입했다는 의미입니다.
@@ -171,6 +179,7 @@ public final class BacktestEngine {
 
             // 현재 실행 캔들에서 단계별 익절 가격에 도달했는지 확인
             if (openPosition != null) {
+                // ==================== 보유 포지션 위험관리 ====================
                 double realizedPnl = positionRiskProcessor.process(
                         openPosition,
                         executionCandle,
@@ -190,6 +199,7 @@ public final class BacktestEngine {
 
         // 데이터가 끝났는데 포지션이 남아 있다면 마지막 캔들의 종가로 강제 청산합니다. (테스트의 마지막 캔들에서도 포지션이 남아 있는 경우에 대한 예외)
         if (openPosition != null) {
+            // ==================== 데이터 종료 청산 ====================
             Candle lastCandle = candles.get(candles.size() - 1);
             BacktestTrade completedTrade = closePosition(
                     openPosition,

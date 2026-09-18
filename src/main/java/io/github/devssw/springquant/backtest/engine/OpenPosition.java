@@ -12,9 +12,11 @@ import java.util.List;
 // 열려있는 포지션의 상태를 저장해두기 위해 필요한 파일
 @Getter
 final class OpenPosition {
+    // ==================== 상수 ====================
     private static final double QUANTITY_TOLERANCE = 1e-12;
 
     // 진입 방향, 진입 시각, 진입가, 진입 수량, 진입 수수료, 위험 관리 설정
+    // ==================== 진입 시점 고정 상태 ====================
     private final PositionSide side;
     private final long entryTimeMs;
     private final double entryPrice;
@@ -23,19 +25,23 @@ final class OpenPosition {
     private final RiskManagementConfig riskManagement;
 
     // 익절 분할 결과 리스트 (거래 한 건씩)
+    // ==================== 청산 이력 ====================
     @Getter(AccessLevel.NONE)
     private final List<BacktestExit> exits = new ArrayList<>();
 
     // 포지션 유지 시 바뀌는 필드
     // 남아있는 포지션 수량, 현재 손절가, 다음 익절 단계 (1->2->3), 본전 손절 적용이 되었는지
+    // ==================== 보유 중 변하는 상태 ====================
     private double remainingQuantity;
     private double currentStopPrice;
     private int nextTakeProfitIndex;
     private boolean breakEvenApplied;
 
     // 격리 증거금
+    // ==================== 증거금 상태 ====================
     private final double initialMargin;
 
+    // ==================== 생성 ====================
     OpenPosition(
             long entryTimeMs,
             PositionSide side,
@@ -63,6 +69,7 @@ final class OpenPosition {
     }
 
     // 남은 증거금을 계산하는 메서드입니다
+    // ==================== 증거금 계산 ====================
     double getRemainingMargin() {
         if (isClosed()) {
             return 0.0;
@@ -75,6 +82,7 @@ final class OpenPosition {
     }
 
     // 포지션의 일부/전체를 실제로 청산하는 메서드
+    // ==================== 청산 실행 ====================
     BacktestExit closeQuantity(
             long exitTimeMs,
             double exitPrice,
@@ -105,6 +113,7 @@ final class OpenPosition {
     }
 
     // 수량 값 검증
+    // ==================== 청산 검증/손익 계산 헬퍼 ====================
     private void validateCloseQuantity(double quantity) {
         if (!Double.isFinite(quantity)
                 || quantity <= 0.0
@@ -141,6 +150,7 @@ final class OpenPosition {
     }
 
     // 최초 손절가를 계산
+    // ==================== 손절 가격 규칙 ====================
     private double calculateInitialStopPrice() {
         double stopLossRate = riskManagement.stopLossPercent() / 100.0;
         return switch (side) {
@@ -151,6 +161,7 @@ final class OpenPosition {
 
     //  BacktestEngine에서 사용 //
     // 익절 단계가 남았는지 확인
+    // ==================== 익절 단계 관리 ====================
     boolean hasNextTakeProfit() {
         return nextTakeProfitIndex < riskManagement.takeProfitLevels().size();
     }
@@ -187,6 +198,7 @@ final class OpenPosition {
     }
 
     // 본절 손절가 승격 전환 가격에 도달했는지 확인하는 메서드
+    // ==================== 본전 손절 관리 ====================
     boolean shouldMoveStopToBreakEven(double candleHigh, double candleLow) {
         if (!riskManagement.moveStopToBreakEven() || breakEvenApplied) {
             return false;
@@ -212,6 +224,7 @@ final class OpenPosition {
     }
 
     // 남은 수량이 0이 됐는지 확인
+    // ==================== 상태 조회 ====================
     boolean isClosed() {
         return remainingQuantity <= QUANTITY_TOLERANCE;
     }
