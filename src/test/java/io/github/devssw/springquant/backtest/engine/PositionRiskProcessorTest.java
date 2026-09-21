@@ -179,4 +179,72 @@ class PositionRiskProcessorTest {
         assertEquals(100.0, stopLossExit.exitPrice(), DELTA);
         assertEquals(5.0, stopLossExit.quantity(), DELTA);
     }
+
+    // ============================= 캔들에서 우선순위에 따른 청산이 되는지 테스트 ====================== //
+    @Test
+    void 같은캔들에서손절과익절에도달하면손절을우선한다() {
+        RiskManagementConfig riskManagement = new RiskManagementConfig(
+                10.0,
+                List.of(new TakeProfitLevel(10.0, 1.0)),
+                StopPromotionMode.NONE
+        );
+
+        LiquidationConfig liquidationConfig = new LiquidationConfig(0.0, 0.0, false, 0.0);
+        OpenPosition position = new OpenPosition(1000L, PositionSide.LONG, 100.0, 10.0, 500.0, 0.0, riskManagement);
+
+        /*
+         * 손절가: 90
+         * 익절가: 110
+         *
+         * 저가가 89이므로 손절 가능
+         * 고가가 111이므로 익절 가능
+         */
+        Candle candle = new Candle(2000L, 100.0, 111.0, 89.0, 100.0);
+        double realizedPnl = processor.process(position, candle, 0.0, 0.0, liquidationConfig);
+
+        assertTrue(position.isClosed());
+        assertEquals(-100.0, realizedPnl, DELTA);
+        assertEquals(1, position.getExits().size());
+
+        BacktestExit exit = position.getExits().get(0);
+
+        assertEquals(ExitReason.STOP_LOSS, exit.exitReason());
+        assertEquals(90.0, exit.exitPrice(), DELTA);
+        assertEquals(10.0, exit.quantity(), DELTA);
+        assertFalse(position.hasPendingStopPromotion());
+    }
+
+    @Test
+    void 같은캔들에서강제청산과익절에도달하면강제청산을우선한다() {
+        RiskManagementConfig riskManagement = new RiskManagementConfig(
+                10.0,
+                List.of(new TakeProfitLevel(10.0, 1.0)),
+                StopPromotionMode.NONE
+        );
+
+        LiquidationConfig liquidationConfig = new LiquidationConfig(0.0, 0.0, false, 0.0);
+        OpenPosition position = new OpenPosition(1000L, PositionSide.LONG, 100.0, 10.0, 50.0, 0.0, riskManagement);
+
+        /*
+         * 포지션 가치: 100 × 10 = 1,000
+         * 격리 증거금: 50
+         * 강제청산가: (1,000 - 50) / 10 = 95
+         *
+         * 손절가: 90
+         * 익절가: 110
+         */
+        Candle candle = new Candle(2000L, 100.0, 111.0, 94.0, 100.0);
+        double realizedPnl = processor.process(position, candle, 0.0, 0.0, liquidationConfig);
+
+        assertTrue(position.isClosed());
+        assertEquals(-50.0, realizedPnl, DELTA);
+        assertEquals(1, position.getExits().size());
+
+        BacktestExit exit = position.getExits().get(0);
+
+        assertEquals(ExitReason.LIQUIDATION, exit.exitReason());
+        assertEquals(95.0, exit.exitPrice(), DELTA);
+        assertEquals(10.0, exit.quantity(), DELTA);
+        assertFalse(position.hasPendingStopPromotion());
+    }
 }

@@ -14,6 +14,17 @@ class BacktestEngineTest {
     private static final double DELTA = 1e-9;
     private final BacktestEngine engine = new BacktestEngine();
 
+    private RiskManagementConfig stopPromotionRiskManagement() {
+        return new RiskManagementConfig(
+                50.0,
+                List.of(
+                        new TakeProfitLevel(1.0, 0.5),
+                        new TakeProfitLevel(50.0, 0.5)
+                ),
+                StopPromotionMode.BE_AFTER_TP1
+        );
+    }
+
     private Candle candle(long index, double open, double high, double low, double close) {
         return new Candle(index * 1000L, open, high, low, close);
     }
@@ -189,5 +200,56 @@ class BacktestEngineTest {
         assertEquals(89.1, shortTrade.entryPrice(), DELTA);
         assertEquals(111.1, shortTrade.exitPrice(), DELTA);
         assertEquals(ExitReason.SUPER_TREND, shortTrade.exitReason());
+    }
+
+    // 전체 흐름을 검사합니다
+    @Test
+    void 부분익절후다음캔들에서승격된손절가로청산한다() {
+        List<Candle> candles = List.of(
+                candle(0, 100.0, 101.0, 99.0, 100.0),
+                candle(1, 100.0, 101.0, 99.0, 100.0),
+
+                // 하락하면서 SuperTrend SHORT 신호가 발생합니다.
+                candle(2, 100.0, 100.0, 89.0, 90.0),
+
+                // 시가 90에서 SHORT 진입합니다.
+                // 저가 88이므로 TP1 가격 89.1에 도달합니다.
+                candle(3, 90.0, 91.0, 88.0, 89.0),
+
+                // 다음 시가 88은 SHORT 승격가 90을 침범하지 않았습니다.
+                // 손절가가 90으로 승격되고, 고가 91이 손절가에 도달합니다.
+                candle(4, 88.0, 91.0, 87.0, 90.0)
+        );
+
+        BacktestResult result = engine.run(candles, config(stopPromotionRiskManagement()));
+        assertEquals(1, result.totalTrades());
+
+        BacktestTrade trade = result.trades().get(0);
+        assertEquals(PositionSide.SHORT, trade.side());
+        assertEquals(90.0, trade.entryPrice(), DELTA);
+        assertEquals(2, trade.exits().size());
+
+        BacktestExit takeProfitExit = trade.exits().get(0);
+        BacktestExit promotedStopExit = trade.exits().get(1);
+        double halfQuantity = trade.quantity() * 0.5;
+
+        // TP1 부분 청산
+        assertEquals(ExitReason.TAKE_PROFIT, takeProfitExit.exitReason());
+        assertEquals(89.1, takeProfitExit.exitPrice(), DELTA);
+        assertEquals(halfQuantity, takeProfitExit.quantity(), DELTA);
+
+        // 남은 수량은 승격된 본절 손절가로 청산
+        assertEquals(ExitReason.STOP_LOSS, promotedStopExit.exitReason());
+        assertEquals(90.0, promotedStopExit.exitPrice(), DELTA);
+        assertEquals(halfQuantity, promotedStopExit.quantity(), DELTA);
+
+        // 마지막 청산 사유
+        assertEquals(ExitReason.STOP_LOSS, trade.exitReason());
+
+        // 두 청산 가격을 수량에 따라 평균 낸 가격
+        assertEquals(89.55, trade.exitPrice(), DELTA);
+
+        // 수수료와 슬리피지가 0인 테스트 설정 기준
+        assertEquals(10005.0, result.finalBalance(), DELTA);
     }
 }
