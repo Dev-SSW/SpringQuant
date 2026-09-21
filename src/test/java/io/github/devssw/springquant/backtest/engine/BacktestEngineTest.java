@@ -37,12 +37,12 @@ class BacktestEngineTest {
 
     // 기존 ST 테스트에서 청산관리설정이 개입하지 않도록 만들어 둔 설정 (손절, 익절 조건을 굉장히 멀리 둠)
     private RiskManagementConfig inactiveRiskManagement() {
-        return new RiskManagementConfig(50.0, List.of(new TakeProfitLevel(50.0, 1.0)), false, .0);
+        return new RiskManagementConfig(50.0, List.of(new TakeProfitLevel(50.0, 1.0)), StopPromotionMode.NONE);
     }
 
     // 청산관리설정을 동작하도록 만든 설정 (첫 번째 익절에는 절반 청산, 두 번째는 닿지 못하도록)
     private RiskManagementConfig partialTakeProfitRiskManagement() {
-        return new RiskManagementConfig(50.0, List.of(new TakeProfitLevel(1.0, 0.5), new TakeProfitLevel(50.0, 0.5)), false, 0.0);
+        return new RiskManagementConfig(50.0, List.of(new TakeProfitLevel(1.0, 0.5), new TakeProfitLevel(50.0, 0.5)), StopPromotionMode.NONE);
     }
 
     @Test

@@ -11,6 +11,7 @@ final class PositionRiskProcessor {
     // ==================== 의존 객체 ====================
     private final LiquidationPriceCalculator liquidationPriceCalculator = new LiquidationPriceCalculator();
     private final ExecutionPriceCalculator executionPriceCalculator = new ExecutionPriceCalculator();
+    private final StopPromotionProcessor stopPromotionProcessor = new StopPromotionProcessor();
 
     // ==================== 위험관리 처리 진입점 ====================
     /**
@@ -34,8 +35,6 @@ final class PositionRiskProcessor {
             return realizedPnl;
         }
 
-        // 본절 승격 처리 (moveStopToBreakEvenIfNeeded를 통해 손절가가 수정되면, BacktestEngine.java에서 다음 루프에 승격 처리가 완료됨)
-        moveStopToBreakEvenIfNeeded(position, candle);
         return realizedPnl;
     }
 
@@ -95,6 +94,8 @@ final class PositionRiskProcessor {
         while (position.hasNextTakeProfit()) {
             // 현재 익절 설정 조회
             TakeProfitLevel level = position.nextTakeProfitLevel();
+            // 익절 인덱스 저장
+            int completedTakeProfitIndex = position.getNextTakeProfitIndex();
             // 설정의 목표 퍼센트를 조회하고, 실제 가격을 반환
             double takeProfitPrice = position.takeProfitPrice(level);
             // 이미 목표에 닿았는지 확인하고, 닿지 않은 상태라면 반복 종료
@@ -105,10 +106,13 @@ final class PositionRiskProcessor {
 
             // 설정 청산 수량을 조회하고 계산
             double quantity = position.takeProfitQuantity(level);
+
             // 포지션 청산 메서드
             BacktestExit exit = position.closeQuantity(candle.openTimeMs(), exitPrice, quantity, feeRate, ExitReason.TAKE_PROFIT);
             // 다음 익절 단계로 인덱스 변경
             position.completeTakeProfitLevel();
+            // 익절 완료 후 승격 예약
+            stopPromotionProcessor.scheduleAfterTakeProfit(position, completedTakeProfitIndex);
             // 실제 손익 계산
             realizedPnl += exit.realizedPnl();
 
@@ -125,14 +129,6 @@ final class PositionRiskProcessor {
             case LONG -> candle.high() >= takeProfitPrice;
             case SHORT -> candle.low() <= takeProfitPrice;
         };
-    }
-
-    // 본절 승격 처리
-    // ==================== 본전 손절 처리 ====================
-    private void moveStopToBreakEvenIfNeeded(OpenPosition position, Candle candle) {
-        if (position.shouldMoveStopToBreakEven(candle.high(), candle.low())) {
-            position.moveStopToBreakEven();
-        }
     }
 
     // =========== 강제 청산 =========== //
@@ -221,6 +217,8 @@ final class PositionRiskProcessor {
      */
     // ==================== 시가 안전 청산 ====================
     double processOpenSafetyExit(OpenPosition position, Candle candle, double feeRate, double slippageRate, LiquidationConfig liquidation) {
+        // 예약된 손절가 승격 시도
+        stopPromotionProcessor.tryApplyPendingAtOpen(position, candle.open());
         double liquidationPrice = calculateLiquidationPrice(position, liquidation);
         ExitReason exitReason;
 

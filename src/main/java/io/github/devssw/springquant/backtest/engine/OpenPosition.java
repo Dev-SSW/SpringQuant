@@ -30,12 +30,13 @@ final class OpenPosition {
     private final List<BacktestExit> exits = new ArrayList<>();
 
     // 포지션 유지 시 바뀌는 필드
-    // 남아있는 포지션 수량, 현재 손절가, 다음 익절 단계 (1->2->3), 본전 손절 적용이 되었는지
+    // 남아있는 포지션 수량, 현재 손절가, 다음 익절 단계 (1->2->3)
     // ==================== 보유 중 변하는 상태 ====================
     private double remainingQuantity;
     private double currentStopPrice;
     private int nextTakeProfitIndex;
-    private boolean breakEvenApplied;
+    // 손절가 승격을 발생시킬 익절 단계 (-1은 대기중인 승격이 없다는 의미)
+    private int pendingStopPromotionTakeProfitIndex;
 
     // 격리 증거금
     // ==================== 증거금 상태 ====================
@@ -65,7 +66,7 @@ final class OpenPosition {
         this.riskManagement = riskManagement;
         this.currentStopPrice = calculateInitialStopPrice();
         this.nextTakeProfitIndex = 0;
-        this.breakEvenApplied = false;
+        this.pendingStopPromotionTakeProfitIndex = -1;
     }
 
     // 남은 증거금을 계산하는 메서드입니다
@@ -159,6 +160,34 @@ final class OpenPosition {
         };
     }
 
+    // 익절 체결로 발생한 손절가 승격을 예약합니다.
+    void scheduleStopPromotion(int completedTakeProfitIndex) {
+        if (completedTakeProfitIndex < 0) {
+            throw new IllegalArgumentException("익절 단계 인덱스는 0 이상이어야 합니다.");
+        }
+
+        // 같은 캔들에서 여러 익절 단계가 체결될 수 있으므로 더 높은 단계를 저장하기 위함
+        pendingStopPromotionTakeProfitIndex = Math.max(pendingStopPromotionTakeProfitIndex, completedTakeProfitIndex);
+    }
+
+    // 새로운 손절가 적용
+    void applyPromotedStop(double promotedStopPrice) {
+        if (!Double.isFinite(promotedStopPrice) || promotedStopPrice <= 0.0) {
+            throw new IllegalArgumentException("승격 손절가는 0보다 큰 유한한 값이어야 합니다.");
+        }
+
+        boolean improvesStop = switch (side) {
+            case LONG -> promotedStopPrice > currentStopPrice;
+            case SHORT -> promotedStopPrice < currentStopPrice;
+        };
+
+        if (!improvesStop) {
+            throw new IllegalArgumentException("손절가는 기존보다 유리한 방향으로만 변경할 수 있습니다.");
+        }
+
+        currentStopPrice = promotedStopPrice;
+    }
+
     //  BacktestEngine에서 사용 //
     // 익절 단계가 남았는지 확인
     // ==================== 익절 단계 관리 ====================
@@ -197,34 +226,27 @@ final class OpenPosition {
         nextTakeProfitIndex++;
     }
 
-    // 본절 손절가 승격 전환 가격에 도달했는지 확인하는 메서드
-    // ==================== 본전 손절 관리 ====================
-    boolean shouldMoveStopToBreakEven(double candleHigh, double candleLow) {
-        if (!riskManagement.moveStopToBreakEven() || breakEvenApplied) {
-            return false;
+    // 승격 대기 여부 확인
+    boolean hasPendingStopPromotion() {
+        return pendingStopPromotionTakeProfitIndex >= 0;
+    }
+
+    // 승격 대기 중인 익절 단계 조회
+    int getPendingStopPromotionTakeProfitIndex() {
+        if (!hasPendingStopPromotion()) {
+            throw new IllegalStateException("대기 중인 손절가 승격이 없습니다.");
         }
 
-        double triggerRate = riskManagement.breakEvenTriggerPercent() / 100.0;
-
-        double triggerPrice = switch (side) {
-            case LONG -> entryPrice * (1.0 + triggerRate);
-            case SHORT -> entryPrice * (1.0 - triggerRate);
-        };
-
-        return switch (side) {
-            case LONG -> candleHigh >= triggerPrice;
-            case SHORT -> candleLow <= triggerPrice;
-        };
+        return pendingStopPromotionTakeProfitIndex;
     }
 
-    // 본전 손절을 실제로 적용
-    void moveStopToBreakEven() {
-        currentStopPrice = entryPrice;
-        breakEvenApplied = true;
+    // 승격 대기 상태 제거 (승격이 정상적으로 적용됐거나 더 이상 승격할 가격이 없을 때 호출)
+    void clearPendingStopPromotion() {
+        pendingStopPromotionTakeProfitIndex = -1;
     }
 
-    // 남은 수량이 0이 됐는지 확인
     // ==================== 상태 조회 ====================
+    // 남은 수량이 0이 됐는지 확인
     boolean isClosed() {
         return remainingQuantity <= QUANTITY_TOLERANCE;
     }

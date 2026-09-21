@@ -2,6 +2,7 @@ package io.github.devssw.springquant.backtest.engine;
 
 import io.github.devssw.springquant.backtest.model.PositionSide;
 import io.github.devssw.springquant.backtest.model.RiskManagementConfig;
+import io.github.devssw.springquant.backtest.model.StopPromotionMode;
 import io.github.devssw.springquant.backtest.model.TakeProfitLevel;
 import org.junit.jupiter.api.Test;
 
@@ -13,7 +14,7 @@ class PositionEntryValidatorTest {
     private final PositionEntryValidator validator = new PositionEntryValidator();
 
     private RiskManagementConfig riskManagement() {
-        return new RiskManagementConfig(10.0, List.of(new TakeProfitLevel(50.0, 1.0)), false, 0.0);
+        return new RiskManagementConfig(10.0, List.of(new TakeProfitLevel(50.0, 1.0)), StopPromotionMode.NONE);
     }
 
     private OpenPosition longPosition(double margin) {

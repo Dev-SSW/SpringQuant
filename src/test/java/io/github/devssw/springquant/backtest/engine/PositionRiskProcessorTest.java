@@ -17,7 +17,7 @@ class PositionRiskProcessorTest {
     // 위험 관리 설정
     private RiskManagementConfig riskManagement() {
         // 손절 10%로 설정됨 (익절은 50%, 수량 전체 (1.0))
-        return new RiskManagementConfig(10.0, List.of(new TakeProfitLevel(50.0, 1.0)), false, 0.0);
+        return new RiskManagementConfig(10.0, List.of(new TakeProfitLevel(50.0, 1.0)), StopPromotionMode.NONE);
     }
 
     @Test
@@ -54,36 +54,48 @@ class PositionRiskProcessorTest {
 
     @Test
     void 수익구간도달후다음캔들에서본전손절() {
-        RiskManagementConfig riskManagement = new RiskManagementConfig(10.0, List.of(new TakeProfitLevel(50.0, 1.0)), true, 5.0);
+        RiskManagementConfig riskManagement = new RiskManagementConfig(
+                10.0,
+                List.of(new TakeProfitLevel(5.0, 0.5), new TakeProfitLevel(50.0, 0.5)),
+                StopPromotionMode.BE_AFTER_TP1
+        );
 
         OpenPosition position = new OpenPosition(1000L, PositionSide.LONG, 100.0, 10.0, 1000.0, 0.0, riskManagement);
 
         // 고가가 본전 손절 승격 기준인 105에 도달
-        Candle triggerCandle = new Candle(2000L, 100.0, 106.0, 95.0, 105.0);
+        Candle triggerCandle = new Candle(2000L, 100.0, 105.0, 91.0, 105.0);
         double firstPnl = processor.process(position, triggerCandle, 0.0, 0.0, BacktestTestFixtures.liquidationConfig());
 
-        assertEquals(0.0, firstPnl, DELTA);
-        assertEquals(100.0, position.getCurrentStopPrice(), DELTA);
+        assertEquals(25.0, firstPnl, DELTA);
+        assertEquals(90.0, position.getCurrentStopPrice(), DELTA);
+        assertTrue(position.hasPendingStopPromotion());
+        assertEquals(0, position.getPendingStopPromotionTakeProfitIndex());
         assertFalse(position.isClosed());
 
         // 다음 캔들에서 변경된 손절가 100에 도달
-        Candle stopCandle = new Candle(3000L, 105.0, 106.0, 99.0, 100.0);
+        Candle stopCandle = new Candle(3000L, 104.0, 104.0, 99.0, 100.0);
         double secondPnl = processor.process(position, stopCandle, 0.0, 0.0, BacktestTestFixtures.liquidationConfig());
 
         assertEquals(0.0, secondPnl, DELTA);
         assertTrue(position.isClosed());
-        assertEquals(1, position.getExits().size());
+        assertEquals(2, position.getExits().size());
 
-        BacktestExit exit = position.getExits().get(0);
+        BacktestExit takeProfitExit = position.getExits().get(0);
+        assertEquals(105.0, takeProfitExit.exitPrice(), DELTA);
+        assertEquals(5.0, takeProfitExit.quantity(), DELTA);
+        assertEquals(ExitReason.TAKE_PROFIT, takeProfitExit.exitReason());
+
+        BacktestExit exit = position.getExits().get(1);
 
         assertEquals(100.0, exit.exitPrice(), DELTA);
+        assertEquals(5.0, exit.quantity(), DELTA);
         assertEquals(ExitReason.STOP_LOSS, exit.exitReason());
     }
 
     @Test
     void 손절가보다강제청산가가먼저도달하면강제청산() {
         // 손절가는 50%로 가격이 50이 되면 손절이지만, LiquidationPriceCalculator 클래스에서 계산된 청산가는 90이 되므로 청산가가 먼저 도달하도록 설정
-        RiskManagementConfig riskManagement = new RiskManagementConfig(50.0, List.of(new TakeProfitLevel(50.0, 1.0)), false, 0.0);
+        RiskManagementConfig riskManagement = new RiskManagementConfig(50.0, List.of(new TakeProfitLevel(50.0, 1.0)), StopPromotionMode.NONE);
         OpenPosition position = new OpenPosition(1000L, PositionSide.LONG, 100.0, 10.0, 100.0, 0.0, riskManagement);
         Candle candle = new Candle(2000L, 100.0, 101.0, 89.0, 90.0);
 
@@ -108,5 +120,63 @@ class PositionRiskProcessorTest {
 
         assertEquals(6.0, position.getRemainingQuantity(), DELTA);
         assertEquals(60.0, position.getRemainingMargin(), DELTA);
+    }
+
+    // ======================== 손절가 승격이 연결되었는지 테스트합니다 ====================== //
+    @Test
+    void 익절후다음캔들에서승격된손절가로청산한다() {
+        RiskManagementConfig riskManagement = new RiskManagementConfig(
+                10.0,
+                List.of(
+                        new TakeProfitLevel(10.0, 0.5),
+                        new TakeProfitLevel(20.0, 0.5)
+                ),
+                StopPromotionMode.BE_AFTER_TP1
+        );
+
+        LiquidationConfig liquidationConfig = new LiquidationConfig(0.0, 0.0, false, 0.0);
+        OpenPosition position = new OpenPosition(1000L, PositionSide.LONG, 100.0, 10.0, 100.0, 0.0, riskManagement);
+
+        // TP1 가격 110에 도달하지만 기존 손절가 90에는 도달하지 않습니다.
+        Candle takeProfitCandle = new Candle(2000L, 100.0, 111.0, 95.0, 110.0);
+
+        double firstRealizedPnl = processor.process(position, takeProfitCandle, 0.0, 0.0, liquidationConfig);
+
+        // 초기 수량 10의 절반인 5가 TP1 가격 110에서 청산됩니다.
+        assertEquals(50.0, firstRealizedPnl, DELTA);
+        assertEquals(5.0, position.getRemainingQuantity(), DELTA);
+
+        // TP 체결 봉에서는 아직 기존 손절가를 유지합니다.
+        assertEquals(90.0, position.getCurrentStopPrice(), DELTA);
+        assertTrue(position.hasPendingStopPromotion());
+
+        // 다음 캔들은 105에서 시작하고 저가는 99까지 내려갑니다.
+        Candle nextCandle = new Candle(3000L, 105.0, 106.0, 99.0, 100.0);
+
+        // 시가 105가 승격 후보 100을 침범하지 않았으므로
+        // 손절가가 진입가 100으로 승격됩니다.
+        double openSafetyPnl = processor.processOpenSafetyExit(position, nextCandle, 0.0, 0.0, liquidationConfig);
+
+        assertEquals(0.0, openSafetyPnl, DELTA);
+        assertEquals(100.0, position.getCurrentStopPrice(), DELTA);
+        assertFalse(position.hasPendingStopPromotion());
+
+        // 같은 캔들의 저가 99가 승격된 손절가 100에 도달하므로
+        // 남은 수량이 본절 가격에서 청산됩니다.
+        double secondRealizedPnl = processor.process(position, nextCandle, 0.0, 0.0, liquidationConfig);
+
+        assertEquals(0.0, secondRealizedPnl, DELTA);
+        assertTrue(position.isClosed());
+        assertEquals(2, position.getExits().size());
+
+        BacktestExit takeProfitExit = position.getExits().get(0);
+        BacktestExit stopLossExit = position.getExits().get(1);
+
+        assertEquals(ExitReason.TAKE_PROFIT, takeProfitExit.exitReason());
+        assertEquals(110.0, takeProfitExit.exitPrice(), DELTA);
+        assertEquals(5.0, takeProfitExit.quantity(), DELTA);
+        assertEquals(ExitReason.STOP_LOSS, stopLossExit.exitReason());
+        assertEquals(100.0, stopLossExit.exitPrice(), DELTA);
+        assertEquals(5.0, stopLossExit.quantity(), DELTA);
     }
 }

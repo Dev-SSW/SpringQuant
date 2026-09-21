@@ -64,8 +64,7 @@ class BacktestControllerTest {
                           "riskManagement": {
                             "stopLossPercent": 2.0,
                             "takeProfitLevels": [{"targetPercent": 1.0,"closeRatio": 0.5},{"targetPercent": 2.0,"closeRatio": 0.3},{"targetPercent": 3.0,"closeRatio": 0.2}],
-                            "moveStopToBreakEven": true,
-                            "breakEvenTriggerPercent": 2.0
+                            "stopPromotionMode": "BE_AFTER_TP2"
                           },
                           "liquidation": {
                             "maintenanceMarginRate": 0.01,
@@ -114,8 +113,7 @@ class BacktestControllerTest {
                           "riskManagement": {
                             "stopLossPercent": 2.0,
                             "takeProfitLevels": [{"targetPercent": 1.0,"closeRatio": 0.5},{"targetPercent": 2.0,"closeRatio": 0.3},{"targetPercent": 3.0,"closeRatio": 0.2}],
-                            "moveStopToBreakEven": true,
-                            "breakEvenTriggerPercent": 2.0
+                            "stopPromotionMode": "BE_AFTER_TP2"
                           },
                           "liquidation": {
                             "maintenanceMarginRate": 0.01,
