@@ -18,7 +18,7 @@ public final class BacktestEngine {
     private final EntrySignalEvaluator entrySignalEvaluator = new EntrySignalEvaluator();
     private final PositionRiskProcessor positionRiskProcessor = new PositionRiskProcessor();
     private final ExecutionPriceCalculator executionPriceCalculator = new ExecutionPriceCalculator();
-
+    private final PositionEntryValidator positionEntryValidator = new PositionEntryValidator();
     // ==================== 포지션 생성/완료 헬퍼 ====================
     // 가상 포지션 생성
     private OpenPosition enterPosition(Candle candle, PositionSide side, double balance, BacktestConfig config) {
@@ -29,7 +29,7 @@ public final class BacktestEngine {
         double quantity = notional / entryPrice;
         double entryFee = notional * config.feeRate();
 
-        return new OpenPosition(
+        OpenPosition position = new OpenPosition(
                 candle.openTimeMs(),
                 side,
                 entryPrice,
@@ -38,6 +38,13 @@ public final class BacktestEngine {
                 entryFee,
                 config.riskManagement()
         );
+
+        // 청산가가 손절가보다 먼저 나오는 진입을 막을지 확인
+        if (!positionEntryValidator.canEnter(position, config.liquidation())) {
+            return null;
+        }
+
+        return position;
     }
 
     // 모든 수량이 청산된 포지션을 완료 거래로 변환
@@ -171,10 +178,14 @@ public final class BacktestEngine {
                         balance,
                         config
                 );
-                // 진입 수수료 차감
-                balance -= openPosition.getEntryFee();
-                // 추세 번호를 주입합니다.
-                lastEnteredTrendId = superTrend.trendId();
+
+                // 가상 포지션 생성시, 진입이 거부되면 null일 수 있으므로 조건문이 추가되었습니다.
+                if (openPosition != null) {
+                    // 진입 수수료 차감
+                    balance -= openPosition.getEntryFee();
+                    // 추세 번호를 주입합니다.
+                    lastEnteredTrendId = superTrend.trendId();
+                }
             }
 
             // 현재 실행 캔들에서 단계별 익절 가격에 도달했는지 확인
