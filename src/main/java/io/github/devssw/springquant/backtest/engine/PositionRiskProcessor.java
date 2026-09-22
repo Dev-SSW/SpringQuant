@@ -211,47 +211,23 @@ final class PositionRiskProcessor {
         return exit.realizedPnl();
     }
 
-    // =========== =========== //
-
     /**
      * 새로운 캔들의 시가가 이미 강제청산가나 손절가를 넘어섰는지 확인합니다.
      * 강제청산과 손절이 동시에 발생할 수 있다면 강제청산을 우선합니다.
      */
     // ==================== 시가 안전 청산 ====================
     double processOpenSafetyExit(OpenPosition position, Candle candle, double feeRate, double slippageRate, LiquidationConfig liquidation) {
-        // 예약된 손절가 승격 시도
-        stopPromotionProcessor.tryApplyPendingAtOpen(position, candle.open());
-        double liquidationPrice = calculateLiquidationPrice(position, liquidation);
-        ExitReason exitReason;
-
-        // 시가가 이미 청산가를 넘어섰는지 확인 (강제 청산 우선)
-        if (isLiquidatedAtOpen(position, candle, liquidationPrice)) {
-            exitReason = ExitReason.LIQUIDATION;
-        } else if (isStoppedAtOpen(position, candle)) {
-            // 시가가 손절가를 넘었는지확인
-            exitReason = ExitReason.STOP_LOSS;
-        } else {
-            return 0.0;
-        }
-
-        double exitPrice = executionPriceCalculator.exitPrice(
-                position.getSide(),
-                candle.open(),
-                slippageRate,
-                exitReason
-        );
-
-        BacktestExit exit = position.closeQuantity(
-                candle.openTimeMs(),
-                exitPrice,
-                position.getRemainingQuantity(),
+        return processOpenSafetyExit(
+                position,
+                candle,
                 feeRate,
-                exitReason
+                slippageRate,
+                liquidation,
+                event -> { }
         );
-
-        return exit.realizedPnl();
     }
 
+    /** 실제 처리는 이 메서드에서 담당합니다. */
     double processOpenSafetyExit(OpenPosition position, Candle candle, double feeRate, double slippageRate,
                                  LiquidationConfig liquidation,
                                  Consumer<BacktestEvent> eventConsumer) {
@@ -294,8 +270,6 @@ final class PositionRiskProcessor {
 
         return exit.realizedPnl();
     }
-
-
 
     // ==================== 시가 안전 청산 판단 헬퍼 ====================
     private boolean isStoppedAtOpen(OpenPosition position, Candle candle) {

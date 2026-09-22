@@ -129,9 +129,8 @@ public final class BacktestEngine {
                 continue;
             }
 
-            // 새 캔들의 시가가 이미 손절가 또는 강제청산가를 넘었다면
-            // SuperTrend 반전 청산보다 먼저 처리합니다.
             // ==================== 시가 안전 청산 ====================
+            // 대기 중 손절가 승격 -> 시가 갭 손절/안전청산 검사 (포지션이 있는 상황이라면, 가장 먼저 호출합니다)
             if (openPosition != null) {
                 double realizedPnl =
                         positionRiskProcessor.processOpenSafetyExit(
@@ -153,8 +152,8 @@ public final class BacktestEngine {
                 }
             }
 
-            // 현재 보유 중인 포지션과 반대되는 SuperTrend 전환 신호가 발생하면 청산합니다.
             // ==================== SuperTrend 반전 청산 ====================
+            // 보유 포지션과 반대되는 추세 전환이면 청산
             if (openPosition != null && entrySignalEvaluator.shouldExitBySuperTrend(openPosition, superTrend)) {
                 // 내부적으로 포지션을 종료하고 손익을 계산합니다 (closePosition())
                 BacktestTrade completedTrade = closePosition(
@@ -172,19 +171,26 @@ public final class BacktestEngine {
                 openPosition = null;
             }
 
-            // 새로운 진입 방향을 판단합니다 (만약 진입 조건이 충족되지 않는다면 null이 반환되어 다음 캔들로 넘어갑니다)
-            // Direction : 시장의 추세 상태 / Signal : 추세가 방금 바뀌었음을 나타냄 / PositionSide : 백테스트가 실제로 보유중인 방향
-            // Direction이 Long으로 바뀌면, Signal은 처음에 Long을 반환합니다. 그리고 Direction이 다시 바뀌기 전까지는 None 상태를 유지합니다
-            // 아직 Direction이 유지중이라면, 조건을 충족하는 순간 (determineEntrySide) PositionSide가 진입을 시도합니다
-            // 보유중인 상황에서 Direction의 추세가 바뀌면, Signal은  Short를 반환하고, PositionSide는 청산됩니다
+            /**
+             * Direction : 시장의 추세 상태 / Signal : 추세가 방금 바뀌었음을 나타냄 / PositionSide : 백테스트가 실제로 보유중인 방향
+             * Direction이 Long으로 바뀌면, Signal은 처음에 Long을 반환합니다. 그리고 Direction이 다시 바뀌기 전까지는 None 상태를 유지합니다
+             * 아직 Direction이 유지중이라면, 조건을 충족하는 순간 (determineEntrySide) PositionSide가 진입을 시도합니다
+             * 보유중인 상황에서 Direction의 추세가 바뀌면, Signal은  Short를 반환하고, PositionSide는 청산됩니다
+             */
+
             // ==================== 신규 진입 판단 ====================
+            //진입 조건을 평가해 LONG · SHORT · null 결정
             PositionSide entrySide = entrySignalEvaluator.determineEntrySide(signalCandle, band, superTrend, config);
-            // oneEntryPerTrend()는 추세 당 한 번의 진입만을 허용할지 말지에 대한 설정입니다. True이면 추세 당 한 번만 허용합니다.
-            // trendid는 추세가 바뀌면 증가하는 추세 번호입니다. 해당 추세 번호가 마지막 추세 번호와 같다면, 같은 추세에서 이미 한 번 진입했다는 의미입니다.
+
+            /**
+             * oneEntryPerTrend()는 추세 당 한 번의 진입만을 허용할지 말지에 대한 설정입니다. True이면 추세 당 한 번만 허용합니다.
+             * trendid는 추세가 바뀌면 증가하는 추세 번호입니다. 해당 추세 번호가 마지막 추세 번호와 같다면, 같은 추세에서 이미 한 번 진입했다는 의미입니다.
+             */
             boolean alreadyEnteredInTrend = config.oneEntryPerTrend() && lastEnteredTrendId == superTrend.trendId();
 
             // 가상 포지션을 생성합니다
             if (openPosition == null && entrySide != null && !alreadyEnteredInTrend && balance > 0.0) {
+                // 진입가·증거금·수량·수수료·손절가·청산가 계산 후 포지션 생성
                 openPosition = enterPosition(
                         executionCandle,
                         entrySide,
@@ -201,9 +207,10 @@ public final class BacktestEngine {
                 }
             }
 
-            // 현재 실행 캔들에서 단계별 익절 가격에 도달했는지 확인
+            // 강제청산/손절 검사, 포지션이 종료됐는지 검사, 분할 익절 검사, TP 체결 시 손절 승격 예약
             if (openPosition != null) {
                 // ==================== 보유 포지션 위험관리 ====================
+                // 캔들 내부 강제청산·손절 우선 검사 후 분할 익절과 승격 예약
                 double realizedPnl = positionRiskProcessor.process(
                         openPosition,
                         executionCandle,
@@ -214,6 +221,7 @@ public final class BacktestEngine {
                 balance += realizedPnl;
                 // 마지막 익절 단계까지 실행되어 수량이 모두 청산된 경우
                 if (openPosition.isClosed()) {
+                    // 수량이 모두 청산되면 OpenPosition을 BacktestTrade로 변환
                     BacktestTrade completedTrade = completeTrade(openPosition, balance);
                     trades.add(completedTrade);
                     openPosition = null;
@@ -236,6 +244,7 @@ public final class BacktestEngine {
             );
             trades.add(completedTrade);
         }
+        // 거래 통계·이벤트를 모아 최종 결과 반환
         return BacktestResult.from(config.initialBalance(), trades, runtimeEvents);
     }
 }
