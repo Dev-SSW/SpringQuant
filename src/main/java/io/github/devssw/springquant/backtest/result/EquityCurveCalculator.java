@@ -3,7 +3,12 @@ package io.github.devssw.springquant.backtest.result;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-
+/**
+ * BacktestExit	                각각의 분할 청산 시간과 손익 저장
+ * BacktestEvent	            익절·손절·승격 등 세부 사건 기록
+ * EquityCurveCalculator	해당 사건으로 변한 자산을 시간 순서로 계산
+ * DrawdownCalculator	자산 곡선을 이용해 MDD 계산
+ * */
 // 완료된 거래를 다시 읽고, 시간별 잔고를 생성
 public final class EquityCurveCalculator {
     private static final double BALANCE_TOLERANCE = 1e-9;
