@@ -2,7 +2,7 @@ package io.github.devssw.springquant.backtest.service;
 
 import io.github.devssw.springquant.backtest.model.BacktestConfig;
 import io.github.devssw.springquant.backtest.engine.BacktestEngine;
-import io.github.devssw.springquant.backtest.model.BacktestResult;
+import io.github.devssw.springquant.backtest.result.BacktestResult;
 import io.github.devssw.springquant.market.Candle;
 import io.github.devssw.springquant.market.candledata.MarketDataClient;
 import org.springframework.stereotype.Service;

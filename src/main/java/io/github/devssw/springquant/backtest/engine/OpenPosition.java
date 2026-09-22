@@ -2,6 +2,7 @@
 package io.github.devssw.springquant.backtest.engine;
 
 import io.github.devssw.springquant.backtest.model.*;
+import io.github.devssw.springquant.backtest.result.BacktestExit;
 import lombok.AccessLevel;
 import lombok.Getter;
 

@@ -2,6 +2,7 @@ package io.github.devssw.springquant.backtest.engine;
 
 import io.github.devssw.springquant.backtest.BacktestTestFixtures;
 import io.github.devssw.springquant.backtest.model.*;
+import io.github.devssw.springquant.backtest.result.BacktestExit;
 import io.github.devssw.springquant.market.Candle;
 import org.junit.jupiter.api.Test;
 

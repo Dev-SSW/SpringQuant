@@ -1,6 +1,6 @@
 package io.github.devssw.springquant.backtest.api;
 
-import io.github.devssw.springquant.backtest.model.BacktestResult;
+import io.github.devssw.springquant.backtest.result.BacktestResult;
 import io.github.devssw.springquant.backtest.service.BacktestService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;

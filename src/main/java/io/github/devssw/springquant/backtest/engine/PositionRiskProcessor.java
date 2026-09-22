@@ -1,6 +1,8 @@
 package io.github.devssw.springquant.backtest.engine;
 
 import io.github.devssw.springquant.backtest.model.*;
+import io.github.devssw.springquant.backtest.result.BacktestEvent;
+import io.github.devssw.springquant.backtest.result.BacktestExit;
 import io.github.devssw.springquant.market.Candle;
 
 import java.util.Objects;

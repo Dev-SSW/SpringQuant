@@ -1,4 +1,4 @@
-package io.github.devssw.springquant.backtest.model;
+package io.github.devssw.springquant.backtest.result;
 
 // 백테스트 도중 발생한 사건을 기록하기 위한 이벤트
 public enum BacktestEventType {

@@ -1,4 +1,6 @@
-package io.github.devssw.springquant.backtest.model;
+package io.github.devssw.springquant.backtest.result;
+
+import io.github.devssw.springquant.backtest.model.ExitReason;
 
 import java.util.ArrayList;
 import java.util.List;

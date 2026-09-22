@@ -1,4 +1,4 @@
-package io.github.devssw.springquant.backtest.model;
+package io.github.devssw.springquant.backtest.result;
 
 import java.util.ArrayList;
 import java.util.Comparator;

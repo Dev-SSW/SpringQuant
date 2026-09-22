@@ -1,7 +1,7 @@
 package io.github.devssw.springquant.backtest.engine;
 
-import io.github.devssw.springquant.backtest.model.BacktestEvent;
-import io.github.devssw.springquant.backtest.model.BacktestEventType;
+import io.github.devssw.springquant.backtest.result.BacktestEvent;
+import io.github.devssw.springquant.backtest.result.BacktestEventType;
 import io.github.devssw.springquant.backtest.model.PositionSide;
 import io.github.devssw.springquant.backtest.model.StopPromotionMode;
 

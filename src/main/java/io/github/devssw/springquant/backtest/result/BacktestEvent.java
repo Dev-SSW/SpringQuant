@@ -1,4 +1,6 @@
-package io.github.devssw.springquant.backtest.model;
+package io.github.devssw.springquant.backtest.result;
+
+import io.github.devssw.springquant.backtest.model.PositionSide;
 
 import java.util.Objects;
 

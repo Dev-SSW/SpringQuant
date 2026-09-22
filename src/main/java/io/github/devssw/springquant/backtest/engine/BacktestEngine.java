@@ -1,6 +1,10 @@
 package io.github.devssw.springquant.backtest.engine;
 
 import io.github.devssw.springquant.backtest.model.*;
+import io.github.devssw.springquant.backtest.result.BacktestEvent;
+import io.github.devssw.springquant.backtest.result.BacktestExit;
+import io.github.devssw.springquant.backtest.result.BacktestResult;
+import io.github.devssw.springquant.backtest.result.BacktestTrade;
 import io.github.devssw.springquant.indicator.bollingerband.BollingerBand;
 import io.github.devssw.springquant.indicator.bollingerband.BollingerBandCalculator;
 import io.github.devssw.springquant.indicator.supertrend.SuperTrend;

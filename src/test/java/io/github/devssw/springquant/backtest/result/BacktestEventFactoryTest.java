@@ -1,5 +1,7 @@
-package io.github.devssw.springquant.backtest.model;
+package io.github.devssw.springquant.backtest.result;
 
+import io.github.devssw.springquant.backtest.model.ExitReason;
+import io.github.devssw.springquant.backtest.model.PositionSide;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

@@ -1,5 +1,6 @@
-package io.github.devssw.springquant.backtest.model;
+package io.github.devssw.springquant.backtest.result;
 
+import io.github.devssw.springquant.backtest.model.ExitReason;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
