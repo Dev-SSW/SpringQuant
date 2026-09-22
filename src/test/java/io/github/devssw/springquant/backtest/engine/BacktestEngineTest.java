@@ -253,6 +253,7 @@ class BacktestEngineTest {
         // 수수료와 슬리피지가 0인 테스트 설정 기준
         assertEquals(10005.0, result.finalBalance(), DELTA);
 
+        // ==== 손절가 승격 ==== //
         List<BacktestEvent> events = result.events();
         assertEquals(4, events.size());
 
@@ -297,6 +298,28 @@ class BacktestEngineTest {
         assertEquals(4000L, stopLossEvent.timeMs());
         assertEquals(PositionSide.SHORT, stopLossEvent.side());
         assertEquals(90.0, stopLossEvent.price(), DELTA);
+
+        // ==== 청산 시각 포함 ==== //
+        List<EquityPoint> equityCurve = result.equityCurve();
+
+        assertFalse(equityCurve.isEmpty());
+
+        EquityPoint firstPoint = equityCurve.get(0);
+        EquityPoint lastPoint = equityCurve.get(equityCurve.size() - 1);
+
+        assertEquals(0L, firstPoint.timeMs());
+        assertEquals(10000.0, firstPoint.balance(), DELTA);
+        assertEquals(4000L, lastPoint.timeMs());
+        assertEquals(result.finalBalance(), lastPoint.balance(), DELTA);
+
+        // ==== MDD 포함 ==== //
+        assertFalse(result.equityCurve().isEmpty());
+
+        double expectedMaxDrawdown = DrawdownCalculator.calculateMaxDrawdownPercent(result.equityCurve());
+
+        assertEquals(expectedMaxDrawdown, result.maxDrawdownPercent(), DELTA);
+        assertTrue(result.maxDrawdownPercent() >= 0.0);
+        assertTrue(result.maxDrawdownPercent() <= 100.0);
     }
 
     @Test

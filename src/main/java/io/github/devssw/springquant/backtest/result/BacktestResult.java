@@ -20,9 +20,11 @@ public record BacktestResult(
         double totalGrossPnl,
         double totalFee,
         double totalNetPnl,
+        double maxDrawdownPercent,
         // 백테스트에서 완료한 개별 거래 전체 목록
         List<BacktestTrade> trades,
-        List<BacktestEvent> events
+        List<BacktestEvent> events,
+        List<EquityPoint> equityCurve
 ) {
     public BacktestResult {
         if (!Double.isFinite(initialBalance) || initialBalance <= 0.0) {
@@ -33,20 +35,41 @@ public record BacktestResult(
             throw new IllegalArgumentException("최종 자산이 음수여서는 안됩니다.");
         }
 
+        if (!Double.isFinite(maxDrawdownPercent) || maxDrawdownPercent < 0.0 || maxDrawdownPercent > 100.0) {
+            throw new IllegalArgumentException("최대 낙폭은 0 이상 100 이하의 유한한 값이어야 합니다.");
+        }
+
         Objects.requireNonNull(trades, "거래 전체 목록이 null이어서는 안됩니다.");
         trades = List.copyOf(trades);
 
         Objects.requireNonNull(events, "이벤트 목록이 null이면 안됩니다.");
         events = List.copyOf(events);
+
+        Objects.requireNonNull(equityCurve, "자산 곡선이 null이면 안됩니다.");
+        equityCurve = List.copyOf(equityCurve);
     }
 
-    // 시작 잔고와 완료된 거래 목록으로 전체 결과를 계산합니다.
     public static BacktestResult from(double initialBalance, List<BacktestTrade> trades) {
-        return from(initialBalance, trades, List.of());
+        Objects.requireNonNull(trades, "거래 전체 목록이 null이면 안됩니다.");
+        long startTimeMs = inferStartTimeMs(trades);
+
+        return from(startTimeMs, initialBalance, trades, List.of());
+    }
+
+    public static BacktestResult from(double initialBalance, List<BacktestTrade> trades, List<BacktestEvent> runtimeEvents) {
+        Objects.requireNonNull(trades, "거래 전체 목록이 null이면 안됩니다.");
+        long startTimeMs = inferStartTimeMs(trades);
+
+        return from(startTimeMs, initialBalance, trades, runtimeEvents);
+    }
+
+    // 시작 시간 추론 (테스트 코드 용)
+    private static long inferStartTimeMs(List<BacktestTrade> trades) {
+        return trades.isEmpty() ? 0L : trades.get(0).entryTimeMs();
     }
 
     // 시작 잔고와 완료된 거래 목록으로 전체 결과를 계산합니다.
-    public static BacktestResult from(double initialBalance, List<BacktestTrade> trades, List<BacktestEvent> runtimeEvents) {
+    public static BacktestResult from(long startTimeMs, double initialBalance, List<BacktestTrade> trades, List<BacktestEvent> runtimeEvents) {
         Objects.requireNonNull(trades, "거래 전체 목록이 null이어서는 안됩니다.");
         Objects.requireNonNull(runtimeEvents, "실행 중 이벤트 목록이 null이면 안됩니다.");
 
@@ -80,6 +103,10 @@ public record BacktestResult(
         events.addAll(BacktestEventFactory.create(copiedTrades));
         events.sort(Comparator.comparingLong(BacktestEvent::timeMs));
 
+        List<EquityPoint> equityCurve = EquityCurveCalculator.calculate(startTimeMs, initialBalance, copiedTrades);
+        // 낙폭 계산 (MDD)
+        double maxDrawdownPercent = DrawdownCalculator.calculateMaxDrawdownPercent(equityCurve);
+
         return new BacktestResult(
                 initialBalance,
                 finalBalance,
@@ -91,8 +118,10 @@ public record BacktestResult(
                 totalGrossPnl,
                 totalFee,
                 totalNetPnl,
+                maxDrawdownPercent,
                 copiedTrades,
-                events
+                events,
+                equityCurve
         );
     }
 }

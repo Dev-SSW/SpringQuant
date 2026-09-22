@@ -98,6 +98,9 @@ public final class BacktestEngine {
         Objects.requireNonNull(candles, "candles이 null이면 안됩니다.");
         Objects.requireNonNull(config, "config가 null이면 안됩니다.");
 
+        // 시작 시간 계산
+        long startTimeMs = candles.isEmpty() ? 0L : candles.get(0).openTimeMs();
+
         if (candles.size() < 2) {
             return BacktestResult.from(config.initialBalance(), List.of());
         }
@@ -244,7 +247,8 @@ public final class BacktestEngine {
             );
             trades.add(completedTrade);
         }
+
         // 거래 통계·이벤트를 모아 최종 결과 반환
-        return BacktestResult.from(config.initialBalance(), trades, runtimeEvents);
+        return BacktestResult.from(startTimeMs, config.initialBalance(), trades, runtimeEvents);
     }
 }
