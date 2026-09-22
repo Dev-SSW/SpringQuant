@@ -1,10 +1,10 @@
 package io.github.devssw.springquant.backtest.engine;
 
-import io.github.devssw.springquant.backtest.model.BacktestExit;
-import io.github.devssw.springquant.backtest.model.ExitReason;
-import io.github.devssw.springquant.backtest.model.PositionSide;
-import io.github.devssw.springquant.backtest.model.TakeProfitLevel;
+import io.github.devssw.springquant.backtest.model.*;
 import io.github.devssw.springquant.market.Candle;
+
+import java.util.Objects;
+import java.util.function.Consumer;
 
 // BacktestEngine에서 분리 - 보유 중인 포지션의 익절, 손절 등 위험관리 조건을 처리
 final class PositionRiskProcessor {
@@ -249,6 +249,51 @@ final class PositionRiskProcessor {
 
         return exit.realizedPnl();
     }
+
+    double processOpenSafetyExit(OpenPosition position, Candle candle, double feeRate, double slippageRate,
+                                 LiquidationConfig liquidation,
+                                 Consumer<BacktestEvent> eventConsumer) {
+        Objects.requireNonNull(eventConsumer, "eventConsumer가 null이면 안됩니다.");
+
+        // 예약된 손절가 승격 시도
+        stopPromotionProcessor.tryApplyPendingAtOpen(
+                position,
+                candle.openTimeMs(),
+                candle.open(),
+                eventConsumer
+        );
+        double liquidationPrice = calculateLiquidationPrice(position, liquidation);
+        ExitReason exitReason;
+
+        // 시가가 이미 청산가를 넘어섰는지 확인 (강제 청산 우선)
+        if (isLiquidatedAtOpen(position, candle, liquidationPrice)) {
+            exitReason = ExitReason.LIQUIDATION;
+        } else if (isStoppedAtOpen(position, candle)) {
+            // 시가가 손절가를 넘었는지확인
+            exitReason = ExitReason.STOP_LOSS;
+        } else {
+            return 0.0;
+        }
+
+        double exitPrice = executionPriceCalculator.exitPrice(
+                position.getSide(),
+                candle.open(),
+                slippageRate,
+                exitReason
+        );
+
+        BacktestExit exit = position.closeQuantity(
+                candle.openTimeMs(),
+                exitPrice,
+                position.getRemainingQuantity(),
+                feeRate,
+                exitReason
+        );
+
+        return exit.realizedPnl();
+    }
+
+
 
     // ==================== 시가 안전 청산 판단 헬퍼 ====================
     private boolean isStoppedAtOpen(OpenPosition position, Candle candle) {

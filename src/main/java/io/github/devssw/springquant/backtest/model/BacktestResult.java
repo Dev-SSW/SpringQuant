@@ -1,5 +1,7 @@
 package io.github.devssw.springquant.backtest.model;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 
@@ -19,7 +21,8 @@ public record BacktestResult(
         double totalFee,
         double totalNetPnl,
         // 백테스트에서 완료한 개별 거래 전체 목록
-        List<BacktestTrade> trades
+        List<BacktestTrade> trades,
+        List<BacktestEvent> events
 ) {
     public BacktestResult {
         if (!Double.isFinite(initialBalance) || initialBalance <= 0.0) {
@@ -32,15 +35,23 @@ public record BacktestResult(
 
         Objects.requireNonNull(trades, "거래 전체 목록이 null이어서는 안됩니다.");
         trades = List.copyOf(trades);
+
+        Objects.requireNonNull(events, "이벤트 목록이 null이면 안됩니다.");
+        events = List.copyOf(events);
     }
 
     // 시작 잔고와 완료된 거래 목록으로 전체 결과를 계산합니다.
     public static BacktestResult from(double initialBalance, List<BacktestTrade> trades) {
+        return from(initialBalance, trades, List.of());
+    }
+
+    // 시작 잔고와 완료된 거래 목록으로 전체 결과를 계산합니다.
+    public static BacktestResult from(double initialBalance, List<BacktestTrade> trades, List<BacktestEvent> runtimeEvents) {
         Objects.requireNonNull(trades, "거래 전체 목록이 null이어서는 안됩니다.");
+        Objects.requireNonNull(runtimeEvents, "실행 중 이벤트 목록이 null이면 안됩니다.");
 
         // 수정되지 않도록 임시 변수로 가져옴
         List<BacktestTrade> copiedTrades = List.copyOf(trades);
-
         int winningTrades = 0;
         double totalGrossPnl = 0.0;
         double totalFee = 0.0;
@@ -65,6 +76,10 @@ public record BacktestResult(
         double totalReturnPercent = totalNetPnl / initialBalance * 100.0;
         double winRatePercent = totalTrades == 0 ? 0.0 : (double) winningTrades / totalTrades * 100.0;
 
+        List<BacktestEvent> events = new ArrayList<>(runtimeEvents);
+        events.addAll(BacktestEventFactory.create(copiedTrades));
+        events.sort(Comparator.comparingLong(BacktestEvent::timeMs));
+
         return new BacktestResult(
                 initialBalance,
                 finalBalance,
@@ -76,7 +91,8 @@ public record BacktestResult(
                 totalGrossPnl,
                 totalFee,
                 totalNetPnl,
-                copiedTrades
+                copiedTrades,
+                events
         );
     }
 }

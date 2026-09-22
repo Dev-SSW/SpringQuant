@@ -251,5 +251,79 @@ class BacktestEngineTest {
 
         // 수수료와 슬리피지가 0인 테스트 설정 기준
         assertEquals(10005.0, result.finalBalance(), DELTA);
+
+        List<BacktestEvent> events = result.events();
+        assertEquals(4, events.size());
+
+        BacktestEvent entryEvent = events.get(0);
+        BacktestEvent takeProfitEvent = events.get(1);
+        BacktestEvent promotionEvent = events.get(2);
+        BacktestEvent stopLossEvent = events.get(3);
+
+        // SHORT 진입
+        assertEquals(
+                BacktestEventType.ENTRY,
+                entryEvent.type()
+        );
+        assertEquals(3000L, entryEvent.timeMs());
+        assertEquals(PositionSide.SHORT, entryEvent.side());
+        assertEquals(90.0, entryEvent.price(), DELTA);
+
+        // TP1 부분 익절
+        assertEquals(
+                BacktestEventType.TAKE_PROFIT,
+                takeProfitEvent.type()
+        );
+        assertEquals(3000L, takeProfitEvent.timeMs());
+        assertEquals(PositionSide.SHORT, takeProfitEvent.side());
+        assertEquals(89.1, takeProfitEvent.price(), DELTA);
+
+        // 다음 캔들에서 손절가를 진입가로 승격
+        assertEquals(
+                BacktestEventType.STOP_PROMOTION,
+                promotionEvent.type()
+        );
+        assertEquals(4000L, promotionEvent.timeMs());
+        assertEquals(PositionSide.SHORT, promotionEvent.side());
+        assertEquals(90.0, promotionEvent.price(), DELTA);
+        assertEquals(0.0, promotionEvent.quantity(), DELTA);
+
+        // 승격된 손절가로 남은 수량 청산
+        assertEquals(
+                BacktestEventType.STOP_LOSS,
+                stopLossEvent.type()
+        );
+        assertEquals(4000L, stopLossEvent.timeMs());
+        assertEquals(PositionSide.SHORT, stopLossEvent.side());
+        assertEquals(90.0, stopLossEvent.price(), DELTA);
+    }
+
+    @Test
+    void 시가가승격가를침범하면승격보류이벤트를기록한다() {
+        List<Candle> candles = List.of(
+                candle(0, 100.0, 101.0, 99.0, 100.0),
+                candle(1, 100.0, 101.0, 99.0, 100.0),
+                // 하락으로 SuperTrend SHORT 신호 발생
+                candle(2, 100.0, 100.0, 89.0, 90.0),
+                // 시가 90에서 SHORT 진입 후 TP1 가격 89.1에 도달
+                candle(3, 90.0, 111.0, 89.0, 110.0),
+                // SHORT 승격 후보는 90이지만 시가가 110이므로 이미 침범한 상태
+                candle(4, 110.0, 111.0, 109.0, 110.0)
+        );
+
+        BacktestResult result = engine.run(candles, config(stopPromotionRiskManagement()));
+        List<BacktestEvent> deferredEvents = result.events().stream()
+                .filter(event -> event.type() == BacktestEventType.STOP_PROMOTION_DEFERRED)
+                .toList();
+
+        assertEquals(1, deferredEvents.size());
+
+        BacktestEvent deferredEvent = deferredEvents.get(0);
+
+        assertEquals(BacktestEventType.STOP_PROMOTION_DEFERRED, deferredEvent.type());
+        assertEquals(4000L, deferredEvent.timeMs());
+        assertEquals(PositionSide.SHORT, deferredEvent.side());
+        assertEquals(90.0, deferredEvent.price(), DELTA);
+        assertEquals(0.0, deferredEvent.quantity(), DELTA);
     }
 }

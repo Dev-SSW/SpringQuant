@@ -107,6 +107,8 @@ public final class BacktestEngine {
         double balance = config.initialBalance();
         OpenPosition openPosition = null;
         long lastEnteredTrendId = -1L;
+        // 이벤트 기록
+        List<BacktestEvent> runtimeEvents = new ArrayList<>();
 
         // 캔들을 시간 순서대로 조회합니다
         // ==================== 캔들 순회 및 신호 실행 ====================
@@ -127,8 +129,15 @@ public final class BacktestEngine {
             // SuperTrend 반전 청산보다 먼저 처리합니다.
             // ==================== 시가 안전 청산 ====================
             if (openPosition != null) {
-                double realizedPnl = positionRiskProcessor.processOpenSafetyExit(openPosition, executionCandle, config.feeRate(), config.slippageRate(), config.liquidation());
-
+                double realizedPnl =
+                        positionRiskProcessor.processOpenSafetyExit(
+                                openPosition,
+                                executionCandle,
+                                config.feeRate(),
+                                config.slippageRate(),
+                                config.liquidation(),
+                                runtimeEvents::add
+                        );
                 balance += realizedPnl;
 
                 if (openPosition.isClosed()) {
@@ -223,6 +232,6 @@ public final class BacktestEngine {
             );
             trades.add(completedTrade);
         }
-        return BacktestResult.from(config.initialBalance(), trades);
+        return BacktestResult.from(config.initialBalance(), trades, runtimeEvents);
     }
 }
