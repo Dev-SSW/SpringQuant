@@ -37,8 +37,10 @@ class BacktestControllerTest {
     void 백테스트실행응답() throws Exception {
         BacktestConfig expectedConfig = new BacktestConfig(10000.0, 0.0004, 0.0, 1, 1.0, 10, 1.0, 0.0, 10, 1.0, EntryMode.MA_BOUNCE, 0.0, 0.0, true, BacktestTestFixtures.riskManagementConfig(), BacktestTestFixtures.liquidationConfig());
         BacktestResult expectedResult = BacktestResult.from(10000.0, List.of());
+        BacktestChartPoint chartPoint = new BacktestChartPoint(1000L, 100.0, 110.0, 90.0, 105.0, null, null, null, null, null);
+        BacktestResponse expectedResponse = new BacktestResponse("BTCUSDT", "4h", 1000L, 10000L, List.of(chartPoint), expectedResult);
 
-        when(backtestService.run("BTCUSDT", "4h", 1000L, 10000L, expectedConfig)).thenReturn(expectedResult);
+        when(backtestService.run("BTCUSDT", "4h", 1000L, 10000L, expectedConfig)).thenReturn(expectedResponse);
 
         String requestBody =
                 """
@@ -81,8 +83,20 @@ class BacktestControllerTest {
                         .content(requestBody)
                 )
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.initialBalance").value(10000.0))
-                .andExpect(jsonPath("$.finalBalance").value(10000.0));
+                .andExpect(jsonPath("$.symbol").value("BTCUSDT"))
+                .andExpect(jsonPath("$.interval").value("4h"))
+                .andExpect(jsonPath("$.startTimeMs").value(1000))
+                .andExpect(jsonPath("$.endTimeMs").value(10000))
+                .andExpect(jsonPath("$.chartPoints").isArray())
+                .andExpect(jsonPath("$.chartPoints.length()").value(1))
+                .andExpect(jsonPath("$.chartPoints[0].timeMs").value(1000))
+                .andExpect(jsonPath("$.chartPoints[0].open").value(100.0))
+                .andExpect(jsonPath("$.chartPoints[0].high").value(110.0))
+                .andExpect(jsonPath("$.chartPoints[0].low").value(90.0))
+                .andExpect(jsonPath("$.chartPoints[0].close").value(105.0))
+                .andExpect(jsonPath("$.result.initialBalance").value(10000.0))
+                .andExpect(jsonPath("$.result.finalBalance").value(10000.0))
+                .andExpect(jsonPath("$.result.maxDrawdownPercent").value(0.0));
 
         verify(backtestService).run("BTCUSDT", "4h", 1000L, 10000L, expectedConfig);
     }

@@ -18,7 +18,13 @@ public class BacktestController {
     }
 
     @PostMapping
-    public BacktestResult run(@Valid @RequestBody BacktestRequest request) {
-        return backtestService.run(request.symbol(), request.interval(), request.startTimeMs(), request.endTimeMs(), request.toConfig());
+    public BacktestResponse run(@Valid @RequestBody BacktestRequest request) {
+        return backtestService.run(
+                request.symbol(),
+                request.interval(),
+                request.startTimeMs(),
+                request.endTimeMs(),
+                request.toConfig()
+        );
     }
 }

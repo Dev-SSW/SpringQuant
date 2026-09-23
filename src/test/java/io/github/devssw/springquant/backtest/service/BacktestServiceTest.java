@@ -1,6 +1,8 @@
 package io.github.devssw.springquant.backtest.service;
 
 import io.github.devssw.springquant.backtest.BacktestTestFixtures;
+import io.github.devssw.springquant.backtest.api.BacktestChartPoint;
+import io.github.devssw.springquant.backtest.api.BacktestResponse;
 import io.github.devssw.springquant.backtest.engine.BacktestEngine;
 import io.github.devssw.springquant.backtest.model.BacktestConfig;
 import io.github.devssw.springquant.backtest.result.BacktestResult;
@@ -50,8 +52,30 @@ class BacktestServiceTest {
         when(marketDataClient.fetchCandles("BTCUSDT", "4h", 1000L, 10000L)).thenReturn(candles);
         when(backtestEngine.run(candles, config)).thenReturn(expectedResult);
         // 실제 결과와 비교
-        BacktestResult actualResult = backtestService.run("BTCUSDT", "4h", 1000L, 10000L, config);
-        assertSame(expectedResult, actualResult);
+        BacktestResponse response = backtestService.run("BTCUSDT", "4h", 1000L, 10000L, config);
+        assertEquals("BTCUSDT", response.symbol());
+        assertEquals("4h", response.interval());
+        assertEquals(1000L, response.startTimeMs());
+        assertEquals(10000L, response.endTimeMs());
+
+        assertSame(expectedResult, response.result());
+        assertEquals(3, response.chartPoints().size());
+
+        BacktestChartPoint firstPoint = response.chartPoints().get(0);
+
+        assertEquals(0L, firstPoint.timeMs());
+        assertEquals(100.0, firstPoint.open());
+        assertEquals(100.0, firstPoint.high());
+        assertEquals(100.0, firstPoint.low());
+        assertEquals(100.0, firstPoint.close());
+
+        // 지표 기간이 10인데 캔들이 3개뿐이므로 계산 불가
+        assertNull(firstPoint.bollingerBasis());
+        assertNull(firstPoint.bollingerUpper());
+        assertNull(firstPoint.bollingerLower());
+        assertNull(firstPoint.superTrendValue());
+        assertNull(firstPoint.superTrendDirection());
+
         verify(marketDataClient).fetchCandles("BTCUSDT", "4h", 1000L, 10000L);
         verify(backtestEngine).run(candles, config);
     }
