@@ -137,14 +137,6 @@ final class PositionRiskProcessor {
     // 손절과 강제 청산 순서 판단 메서드 (무엇이 먼저인지)
     // ==================== 손절/강제청산 우선순위 처리 ====================
     private double processAdverseExit(OpenPosition position, Candle candle, double feeRate, double slippageRate, LiquidationConfig liquidation) {
-        // 새로운 캔들의 시가가 이미 강제청산가나 손절가를 넘어섰는지 확인합니다. (강제 청산 우선)
-        double realizedPnl = processOpenSafetyExit(position, candle, feeRate, slippageRate, liquidation);
-
-        // 포지션 남았는지 확인
-        if (position.isClosed()) {
-            return realizedPnl;
-        }
-
         // 청산가 계산
         double liquidationPrice = calculateLiquidationPrice(position, liquidation);
 

@@ -135,6 +135,7 @@ public final class BacktestEngine {
             // ==================== 시가 안전 청산 ====================
             // 대기 중 손절가 승격 -> 시가 갭 손절/안전청산 검사 (포지션이 있는 상황이라면, 가장 먼저 호출합니다)
             if (openPosition != null) {
+                // 이전 캔들의 익절로 예약된 손절가 승격 확인
                 double realizedPnl =
                         positionRiskProcessor.processOpenSafetyExit(
                                 openPosition,

@@ -248,4 +248,59 @@ class PositionRiskProcessorTest {
         assertEquals(10.0, exit.quantity(), DELTA);
         assertFalse(position.hasPendingStopPromotion());
     }
+
+    // 기존 코드에서는 processOpenSafetyExit() 호출 이후, process() 내부에서 processOpenSafetyExit()이 한 번 더 호출되었음
+    // 첫 번째에서 승격 성공시 예약이 삭제되므로, 두 번째는 아무 작업도 하지 않는 것과 마찬가지이므로 삭제 -> 테스트 코드로 검증
+    @Test
+    void process는예약된손절가승격을처리하지않는다() {
+        RiskManagementConfig riskManagement = new RiskManagementConfig(
+                10.0,
+                List.of(
+                        new TakeProfitLevel(10.0, 0.5),
+                        new TakeProfitLevel(20.0, 0.5)
+                ),
+                StopPromotionMode.BE_AFTER_TP1
+        );
+
+        LiquidationConfig liquidationConfig = new LiquidationConfig(0.0, 0.0, false, 0.0);
+
+        OpenPosition position = new OpenPosition(
+                1000L,
+                PositionSide.LONG,
+                100.0,
+                10.0,
+                100.0,
+                0.0,
+                riskManagement
+        );
+
+        // TP1 체결 후 손절가 승격이 예약됩니다.
+        Candle takeProfitCandle = new Candle(2000L, 100.0, 111.0, 95.0, 110.0);
+
+        processor.process(
+                position,
+                takeProfitCandle,
+                0.0,
+                0.0,
+                liquidationConfig
+        );
+
+        assertTrue(position.hasPendingStopPromotion());
+        assertEquals(90.0, position.getCurrentStopPrice(), DELTA);
+
+        // 다음 캔들의 내부 위험관리만 실행합니다.
+        Candle nextCandle = new Candle(3000L, 105.0, 106.0, 101.0, 104.0);
+
+        processor.process(
+                position,
+                nextCandle,
+                0.0,
+                0.0,
+                liquidationConfig
+        );
+
+        // process()가 시가 승격을 중복 처리하면 안 됩니다.
+        assertTrue(position.hasPendingStopPromotion());
+        assertEquals(90.0, position.getCurrentStopPrice(), DELTA);
+    }
 }
