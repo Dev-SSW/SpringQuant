@@ -75,6 +75,12 @@ class PositionRiskProcessorTest {
 
         // 다음 캔들에서 변경된 손절가 100에 도달
         Candle stopCandle = new Candle(3000L, 104.0, 104.0, 99.0, 100.0);
+        double openSafetyPnl = processor.processOpenSafetyExit(position, stopCandle, 0.0, 0.0, BacktestTestFixtures.liquidationConfig());
+
+        assertEquals(0.0, openSafetyPnl, DELTA);
+        assertEquals(100.0, position.getCurrentStopPrice(), DELTA);
+        assertFalse(position.hasPendingStopPromotion());
+
         double secondPnl = processor.process(position, stopCandle, 0.0, 0.0, BacktestTestFixtures.liquidationConfig());
 
         assertEquals(0.0, secondPnl, DELTA);

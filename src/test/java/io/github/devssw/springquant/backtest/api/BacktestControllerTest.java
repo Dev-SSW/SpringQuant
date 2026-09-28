@@ -5,6 +5,7 @@ import io.github.devssw.springquant.backtest.model.BacktestConfig;
 import io.github.devssw.springquant.backtest.result.BacktestResult;
 import io.github.devssw.springquant.backtest.model.EntryMode;
 import io.github.devssw.springquant.backtest.service.BacktestService;
+import io.github.devssw.springquant.common.api.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,14 +24,15 @@ import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standal
 
 @ExtendWith(MockitoExtension.class)
 class BacktestControllerTest {
-
     @Mock private BacktestService backtestService;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         BacktestController controller = new BacktestController(backtestService);
-        mockMvc = standaloneSetup(controller).build();
+        mockMvc = standaloneSetup(controller)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
     }
 
     @Test
@@ -139,11 +141,90 @@ class BacktestControllerTest {
                 """;
 
         mockMvc.perform(
-                post("/api/backtests")
+                        post("/api/backtests")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(requestBody)
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("요청값이 올바르지 않습니다."))
+                .andExpect(jsonPath("$.fieldErrors.symbol").value("symbol은 필수입니다."));
+
+        verifyNoInteractions(backtestService);
+    }
+
+    @Test
+    void 잘못된JSON요청() throws Exception {
+        String requestBody =
+                """
+                {
+                  "symbol": "BTCUSDT",
+                  "interval": "4h",
+                }
+                """;
+
+        mockMvc.perform(
+                        post("/api/backtests")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(requestBody)
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("요청 본문의 형식 또는 값이 올바르지 않습니다."))
+                .andExpect(jsonPath("$.path").value("/api/backtests"));
+
+        verifyNoInteractions(backtestService);
+    }
+
+    @Test
+    void 수수료율이1이상이면요청을거부() throws Exception {
+        String requestBody =
+                """
+                {
+                  "symbol": "BTCUSDT",
+                  "interval": "4h",
+                  "startTimeMs": 1000,
+                  "endTimeMs": 10000,
+                  "initialBalance": 10000.0,
+                  "feeRate": 1.0,
+                  "slippageRate": 0.0,
+                  "leverage": 1,
+                  "marginUsageRate": 0.1,
+                  "bollingerPeriod": 12,
+                  "bollingerMultiplier": 1.5,
+                  "bollingerWidthMinPercent": 0.0,
+                  "superTrendLength": 8,
+                  "superTrendFactor": 2.5,
+                  "entryMode": "MA_BOUNCE",
+                  "maTolerancePercent": 0.0,
+                  "bbTolerancePercent": 0.0,
+                  "oneEntryPerTrend": true,
+                  "riskManagement": {
+                    "stopLossPercent": 3.0,
+                    "takeProfitLevels": [
+                      {
+                        "targetPercent": 2.0,
+                        "closeRatio": 1.0
+                      }
+                    ],
+                    "stopPromotionMode": "NONE"
+                  },
+                  "liquidation": {
+                    "maintenanceMarginRate": 0.01,
+                    "maintenanceAmount": 0.0,
+                    "rejectEntryIfLiquidationBeforeStop": true,
+                    "stopBufferPercent": 0.0
+                  }
+                }
+                """;
+
+        mockMvc.perform(post("/api/backtests")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody)
                 )
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.feeRate").value("feeRate는 1보다 작아야 합니다."));
+
         verifyNoInteractions(backtestService);
     }
 }
