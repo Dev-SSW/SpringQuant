@@ -42,18 +42,18 @@
                     <span>인터벌</span>
                     <select name="interval" required>
                         <option value="15m">15m</option>
-                        <option value="1h">1h</option>
-                        <option value="4h" selected>4h</option>
+                        <option value="1h" selected>1h</option>
+                        <option value="4h">4h</option>
                         <option value="1d">1d</option>
                     </select>
                 </label>
                 <label>
                     <span>시작 시간</span>
-                    <input name="startTime" type="datetime-local" value="2024-01-01T00:00" required>
+                    <input name="startTime" type="datetime-local" value="2020-01-01T00:00" required>
                 </label>
                 <label>
                     <span>종료 시간</span>
-                    <input name="endTime" type="datetime-local" value="2024-02-01T00:00" required>
+                    <input name="endTime" type="datetime-local" required>
                 </label>
             </fieldset>
 
@@ -61,23 +61,23 @@
                 <legend>계좌 및 체결</legend>
                 <label>
                     <span>시작 자금</span>
-                    <input name="initialBalance" type="number" min="0" step="0.01" value="10000" required>
+                    <input name="initialBalance" type="number" min="0" step="0.01" value="100" required>
                 </label>
                 <label>
                     <span>수수료율</span>
-                    <input name="feeRate" type="number" min="0" max="0.999999" step="0.0001" value="0.0004" required>
+                    <input name="feeRate" type="number" min="0" max="0.999999" step="0.0001" value="0" required>
                 </label>
                 <label>
                     <span>슬리피지율</span>
-                    <input name="slippageRate" type="number" min="0" max="0.999999" step="0.0001" value="0.0002" required>
+                    <input name="slippageRate" type="number" min="0" max="0.999999" step="0.0001" value="0" required>
                 </label>
                 <label>
                     <span>레버리지</span>
-                    <input name="leverage" type="number" min="1" step="1" value="2" required>
+                    <input name="leverage" type="number" min="1" step="1" value="1" required>
                 </label>
                 <label>
                     <span>자산 사용 비율</span>
-                    <input name="marginUsageRate" type="number" min="0.0001" max="1" step="0.0001" value="0.5" required>
+                    <input name="marginUsageRate" type="number" min="0.0001" max="1" step="0.0001" value="1" required>
                 </label>
             </fieldset>
 
@@ -85,15 +85,15 @@
                 <legend>지표</legend>
                 <label>
                     <span>볼린저 기간</span>
-                    <input name="bollingerPeriod" type="number" min="1" step="1" value="20" required>
+                    <input name="bollingerPeriod" type="number" min="1" step="1" value="10" required>
                 </label>
                 <label>
                     <span>볼린저 배수</span>
-                    <input name="bollingerMultiplier" type="number" min="0.0001" step="0.0001" value="2" required>
+                    <input name="bollingerMultiplier" type="number" min="0.0001" step="0.0001" value="10" required>
                 </label>
                 <label>
                     <span>밴드폭 최소 %</span>
-                    <input name="bollingerWidthMinPercent" type="number" min="0" step="0.01" value="0.1" required>
+                    <input name="bollingerWidthMinPercent" type="number" min="0" step="0.01" value="0" required>
                 </label>
                 <label>
                     <span>SuperTrend 기간</span>
@@ -101,7 +101,7 @@
                 </label>
                 <label>
                     <span>SuperTrend 배수</span>
-                    <input name="superTrendFactor" type="number" min="0.0001" step="0.0001" value="3" required>
+                    <input name="superTrendFactor" type="number" min="0.0001" step="0.0001" value="10" required>
                 </label>
             </fieldset>
 
@@ -110,21 +110,21 @@
                 <label>
                     <span>진입 모드</span>
                     <select name="entryMode" required>
-                        <option value="ST_FLIP">ST_FLIP</option>
-                        <option value="MA_BOUNCE" selected>MA_BOUNCE</option>
+                        <option value="ST_FLIP" selected>ST_FLIP</option>
+                        <option value="MA_BOUNCE">MA_BOUNCE</option>
                         <option value="BB_PIERCE">BB_PIERCE</option>
                     </select>
                 </label>
                 <label>
                     <span>MA 충돌 허용 오차 %</span>
-                    <input name="maTolerancePercent" type="number" min="0" step="0.01" value="0.15" required>
+                    <input name="maTolerancePercent" type="number" min="0" step="0.01" value="0" required>
                 </label>
                 <label>
                     <span>BB 충돌 허용 오차 %</span>
-                    <input name="bbTolerancePercent" type="number" min="0" step="0.01" value="0.15" required>
+                    <input name="bbTolerancePercent" type="number" min="0" step="0.01" value="0" required>
                 </label>
                 <label class="check-row">
-                    <input name="oneEntryPerTrend" type="checkbox" checked>
+                    <input name="oneEntryPerTrend" type="checkbox">
                     <span>추세당 1회 진입</span>
                 </label>
             </fieldset>
@@ -133,14 +133,14 @@
                 <legend>리스크</legend>
                 <label>
                     <span>손절 %</span>
-                    <input name="stopLossPercent" type="number" min="0.0001" step="0.0001" value="2" required>
+                    <input name="stopLossPercent" type="number" min="0.0001" step="0.0001" value="1" required>
                 </label>
                 <label>
                     <span>손절 승격</span>
                     <select name="stopPromotionMode" required>
-                        <option value="NONE">NONE</option>
+                        <option value="NONE" selected>NONE</option>
                         <option value="BE_AFTER_TP1">BE_AFTER_TP1</option>
-                        <option value="BE_AFTER_TP2" selected>BE_AFTER_TP2</option>
+                        <option value="BE_AFTER_TP2">BE_AFTER_TP2</option>
                         <option value="TP1_AFTER_TP2">TP1_AFTER_TP2</option>
                         <option value="BE_TP1_AFTER_TP2">BE_TP1_AFTER_TP2</option>
                         <option value="LOCK_HALF_TP1_AFTER_TP1">LOCK_HALF_TP1_AFTER_TP1</option>
@@ -152,9 +152,9 @@
                     <input name="tpTarget1" type="number" min="0.0001" step="0.0001" value="1" required>
                     <input name="tpRatio1" type="number" min="0.0001" max="1" step="0.0001" value="0.5" required>
                     <input name="tpTarget2" type="number" min="0.0001" step="0.0001" value="2" required>
-                    <input name="tpRatio2" type="number" min="0.0001" max="1" step="0.0001" value="0.3" required>
+                    <input name="tpRatio2" type="number" min="0.0001" max="1" step="0.0001" value="0.25" required>
                     <input name="tpTarget3" type="number" min="0.0001" step="0.0001" value="3" required>
-                    <input name="tpRatio3" type="number" min="0.0001" max="1" step="0.0001" value="0.2" required>
+                    <input name="tpRatio3" type="number" min="0.0001" max="1" step="0.0001" value="0.25" required>
                 </div>
             </fieldset>
 
@@ -162,7 +162,7 @@
                 <legend>청산 보호</legend>
                 <label>
                     <span>유지증거금률</span>
-                    <input name="maintenanceMarginRate" type="number" min="0" max="0.999999" step="0.001" value="0.01" required>
+                    <input name="maintenanceMarginRate" type="number" min="0" max="0.999999" step="0.001" value="0" required>
                 </label>
                 <label>
                     <span>유지증거금액</span>
@@ -173,7 +173,7 @@
                     <input name="stopBufferPercent" type="number" min="0" max="99.9999" step="0.1" value="0" required>
                 </label>
                 <label class="check-row">
-                    <input name="rejectEntryIfLiquidationBeforeStop" type="checkbox" checked>
+                    <input name="rejectEntryIfLiquidationBeforeStop" type="checkbox">
                     <span>청산가 우선 진입 거부</span>
                 </label>
             </fieldset>

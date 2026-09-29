@@ -1,31 +1,11 @@
 spring:
-  application:
-    name: springquant
+  config:
+    activate:
+      on-profile: backtest
 
-trading:
-  exchange:
-    api-key: unused
-    secret-key: unused
-    passphrase: unused
+springdoc:
+  api-docs:
+    enabled: true
 
-  execution:
-    symbol: BTCUSDT
-    leverage: 1
-    margin-usage: 1.0
-    balance-buffer: 1.0
-
-  strategy:
-    bb-period: 10
-    bb-multiplier: 1.0
-    supertrend-length: 10
-    supertrend-factor: 1.0
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-
-  endpoint:
-    health:
-      show-details: never
+  swagger-ui:
+    enabled: true

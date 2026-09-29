@@ -54,9 +54,39 @@
     document.addEventListener("DOMContentLoaded", initialize);
 
     function initialize() {
+        setDefaultDateRange();
         form.addEventListener("submit", handleSubmit);
         exampleButton.addEventListener("click", resetToExample);
         clearOutput();
+    }
+
+    function setDefaultDateRange() {
+        const startInput = form.elements.startTime;
+        const endInput = form.elements.endTime;
+
+        if (startInput) {
+            startInput.defaultValue = "2020-01-01T00:00";
+            startInput.value = startInput.defaultValue;
+        }
+
+        if (endInput) {
+            const startOfToday = new Date();
+            startOfToday.setHours(0, 0, 0, 0);
+
+            const value = toDateTimeLocalValue(startOfToday);
+            endInput.defaultValue = value;
+            endInput.value = value;
+        }
+    }
+
+    function toDateTimeLocalValue(date) {
+        const pad = value => String(value).padStart(2, "0");
+
+        return [
+            date.getFullYear(),
+            pad(date.getMonth() + 1),
+            pad(date.getDate())
+        ].join("-") + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
     }
 
     async function handleSubmit(event) {
@@ -1009,6 +1039,7 @@
     }
 
     function resetToExample() {
+        setDefaultDateRange();
         form.reset();
         clearOutput();
         setStatus("idle", "대기", "예시값을 복원했습니다.");

@@ -1,31 +1,7 @@
 spring:
+  config:
+    activate:
+      on-profile: test
+
   application:
     name: springquant-test
-
-trading:
-  exchange:
-    api-key: test-api-key
-    secret-key: test-secret-key
-    passphrase: test-passphrase
-
-  execution:
-    symbol: ${SYMBOL}
-    leverage: ${LEVERAGE:1}
-    margin-usage: ${MARGIN_USAGE:1.0}
-    balance-buffer: ${BALANCE_BUFFER:1.0}
-
-  strategy:
-    bb-period: ${BB_PERIOD:10}
-    bb-multiplier: ${BB_STD_MULTIPLIER:1.0}
-    supertrend-length: ${ST_LENGTH:10}
-    supertrend-factor: ${ST_FACTOR:1.0}
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-
-  endpoint:
-    health:
-      show-details: never
