@@ -149,7 +149,7 @@
 
         const closeRatioSum = takeProfitLevels.reduce((sum, level) => sum + level.closeRatio, 0);
         if (Math.abs(closeRatioSum - 1) > 1e-9) {
-            throw new Error("분할 청산 비율의 합은 1.0이어야 합니다.");
+            throw new Error("분할 청산 비율의 합은 100%여야 합니다.");
         }
 
         return {
@@ -158,10 +158,10 @@
             startTimeMs,
             endTimeMs,
             initialBalance: readNumber("initialBalance"),
-            feeRate: readNumber("feeRate"),
-            slippageRate: readNumber("slippageRate"),
+            feeRate: readPercentRate("feeRate"),
+            slippageRate: readPercentRate("slippageRate"),
             leverage: readInteger("leverage"),
-            marginUsageRate: readNumber("marginUsageRate"),
+            marginUsageRate: readPercentRate("marginUsageRate"),
             bollingerPeriod: readInteger("bollingerPeriod"),
             bollingerMultiplier: readNumber("bollingerMultiplier"),
             bollingerWidthMinPercent: readNumber("bollingerWidthMinPercent"),
@@ -177,7 +177,7 @@
                 stopPromotionMode: readText("stopPromotionMode")
             },
             liquidation: {
-                maintenanceMarginRate: readNumber("maintenanceMarginRate"),
+                maintenanceMarginRate: readPercentRate("maintenanceMarginRate"),
                 maintenanceAmount: readNumber("maintenanceAmount"),
                 rejectEntryIfLiquidationBeforeStop: readChecked("rejectEntryIfLiquidationBeforeStop"),
                 stopBufferPercent: readNumber("stopBufferPercent")
@@ -188,7 +188,7 @@
     function takeProfitLevel(targetName, ratioName) {
         return {
             targetPercent: readNumber(targetName),
-            closeRatio: readNumber(ratioName)
+            closeRatio: readPercentRate(ratioName)
         };
     }
 
@@ -216,6 +216,10 @@
             throw new Error(`${name} 값은 정수여야 합니다.`);
         }
         return value;
+    }
+
+    function readPercentRate(name) {
+        return readNumber(name) / 100.0;
     }
 
     function readChecked(name) {
