@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SpringQuant 백테스트</title>
+    <link rel="stylesheet" href="/css/backtest.css">
+    <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js" defer></script>
+    <script src="/js/backtest.js" defer></script>
+</head>
+<body>
+<header class="app-header">
+    <div>
+        <p class="eyebrow">SpringQuant</p>
+        <h1>백테스트 시각화</h1>
+    </div>
+    <div class="run-status" aria-live="polite">
+        <span id="status-dot" class="status-dot status-idle"></span>
+        <div>
+            <span class="status-label">실행 상태</span>
+            <strong id="status-text">대기</strong>
+            <small id="status-meta">설정을 입력하고 실행하세요.</small>
+        </div>
+    </div>
+</header>
+
+<main class="page-layout">
+    <section class="settings-panel" aria-labelledby="settings-title">
+        <div class="section-heading">
+            <h2 id="settings-title">백테스트 설정</h2>
+            <span>예시값</span>
+        </div>
+
+        <form id="backtest-form" autocomplete="off">
+            <fieldset>
+                <legend>시장</legend>
+                <label>
+                    <span>심볼</span>
+                    <input name="symbol" type="text" value="BTCUSDT" required>
+                </label>
+                <label>
+                    <span>인터벌</span>
+                    <select name="interval" required>
+                        <option value="15m">15m</option>
+                        <option value="1h" selected>1h</option>
+                        <option value="4h">4h</option>
+                        <option value="1d">1d</option>
+                    </select>
+                </label>
+                <label>
+                    <span>시작 시간</span>
+                    <input name="startTime" type="datetime-local" value="2020-01-01T00:00" required>
+                </label>
+                <label>
+                    <span>종료 시간</span>
+                    <input name="endTime" type="datetime-local" required>
+                </label>
+            </fieldset>
+
+            <fieldset>
+                <legend>계좌 및 체결</legend>
+                <label>
+                    <span>시작 자금</span>
+                    <input name="initialBalance" type="number" min="0.0001" step="any" value="100" required>
+                </label>
+                <label>
+                    <span>수수료율 (%)</span>
+                    <input name="feeRate" type="number" min="0" max="99.9999" step="any" value="0" placeholder="예: 0.06" required>
+                </label>
+                <label>
+                    <span>슬리피지율 (%)</span>
+                    <input name="slippageRate" type="number" min="0" max="99.9999" step="any" value="0" placeholder="예: 0.02" required>
+                </label>
+                <label>
+                    <span>레버리지</span>
+                    <input name="leverage" type="number" min="1" step="1" value="1" required>
+                </label>
+                <label>
+                    <span>자산 사용 비율 (%)</span>
+                    <input name="marginUsageRate" type="number" min="0.0001" max="100" step="any" value="100" required>
+                </label>
+            </fieldset>
+
+            <fieldset>
+                <legend>지표</legend>
+                <label>
+                    <span>볼린저 기간</span>
+                    <input name="bollingerPeriod" type="number" min="1" step="1" value="10" required>
+                </label>
+                <label>
+                    <span>볼린저 배수</span>
+                    <input name="bollingerMultiplier" type="number" min="0.0001" step="any" value="10" required>
+                </label>
+                <label>
+                    <span>밴드폭 최소 (%)</span>
+                    <input name="bollingerWidthMinPercent" type="number" min="0" step="any" value="0" required>
+                </label>
+                <label>
+                    <span>SuperTrend 기간</span>
+                    <input name="superTrendLength" type="number" min="1" step="1" value="10" required>
+                </label>
+                <label>
+                    <span>SuperTrend 배수</span>
+                    <input name="superTrendFactor" type="number" min="0.0001" step="any" value="10" required>
+                </label>
+            </fieldset>
+
+            <fieldset>
+                <legend>진입</legend>
+                <label>
+                    <span>진입 모드</span>
+                    <select name="entryMode" required>
+                        <option value="ST_FLIP" selected>ST_FLIP</option>
+                        <option value="MA_BOUNCE">MA_BOUNCE</option>
+                        <option value="BB_PIERCE">BB_PIERCE</option>
+                    </select>
+                </label>
+                <label>
+                    <span>MA 충돌 허용 오차 (%)</span>
+                    <input name="maTolerancePercent" type="number" min="0" step="any" value="0" required>
+                </label>
+                <label>
+                    <span>BB 충돌 허용 오차 (%)</span>
+                    <input name="bbTolerancePercent" type="number" min="0" step="any" value="0" required>
+                </label>
+                <label class="check-row">
+                    <input name="oneEntryPerTrend" type="checkbox">
+                    <span>추세당 1회 진입</span>
+                </label>
+            </fieldset>
+
+            <fieldset>
+                <legend>리스크</legend>
+                <label>
+                    <span>손절 (%)</span>
+                    <input name="stopLossPercent" type="number" min="0.0001" step="any" value="1" required>
+                </label>
+                <label>
+                    <span>손절 승격</span>
+                    <select name="stopPromotionMode" required>
+                        <option value="NONE" selected>NONE</option>
+                        <option value="BE_AFTER_TP1">BE_AFTER_TP1</option>
+                        <option value="BE_AFTER_TP2">BE_AFTER_TP2</option>
+                        <option value="TP1_AFTER_TP2">TP1_AFTER_TP2</option>
+                        <option value="BE_TP1_AFTER_TP2">BE_TP1_AFTER_TP2</option>
+                        <option value="LOCK_HALF_TP1_AFTER_TP1">LOCK_HALF_TP1_AFTER_TP1</option>
+                    </select>
+                </label>
+                <div class="take-profit-grid" aria-label="분할 익절 설정">
+                    <span>목표 수익 (%)</span>
+                    <span>청산 비율 (%)</span>
+                    <input name="tpTarget1" type="number" min="0.0001" step="any" value="1" required>
+                    <input name="tpRatio1" type="number" min="0.0001" max="100" step="any" value="50" required>
+                    <input name="tpTarget2" type="number" min="0.0001" step="any" value="2" required>
+                    <input name="tpRatio2" type="number" min="0.0001" max="100" step="any" value="25" required>
+                    <input name="tpTarget3" type="number" min="0.0001" step="any" value="3" required>
+                    <input name="tpRatio3" type="number" min="0.0001" max="100" step="any" value="25" required>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>청산 보호</legend>
+                <label>
+                    <span>유지증거금률 (%)</span>
+                    <input name="maintenanceMarginRate" type="number" min="0" max="99.9999" step="any" value="0" placeholder="예: 0.4" required>
+                </label>
+                <label>
+                    <span>유지증거금액</span>
+                    <input name="maintenanceAmount" type="number" min="0" step="any" value="0" required>
+                </label>
+                <label>
+                    <span>손절/청산 거리 최소 (%)</span>
+                    <input name="stopBufferPercent" type="number" min="0" max="99.9999" step="any" value="0" required>
+                </label>
+                <label class="check-row">
+                    <input name="rejectEntryIfLiquidationBeforeStop" type="checkbox">
+                    <span>청산가 우선 진입 거부</span>
+                </label>
+            </fieldset>
+
+            <div class="form-actions">
+                <button id="run-button" type="submit">백테스트 실행</button>
+                <button id="example-button" type="button">예시값 복원</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="results-stack" aria-label="백테스트 결과">
+        <section class="summary-panel" aria-labelledby="summary-title">
+            <div class="section-heading">
+                <h2 id="summary-title">결과 요약</h2>
+                <span id="summary-range">-</span>
+            </div>
+            <div class="summary-grid">
+                <article class="metric-card">
+                    <span>시작 자금</span>
+                    <strong id="metric-initial">-</strong>
+                </article>
+                <article class="metric-card">
+                    <span>최종 자산</span>
+                    <strong id="metric-final">-</strong>
+                </article>
+                <article class="metric-card">
+                    <span>수익률</span>
+                    <strong id="metric-return">-</strong>
+                </article>
+                <article class="metric-card">
+                    <span>거래 수</span>
+                    <strong id="metric-trades">-</strong>
+                </article>
+                <article class="metric-card">
+                    <span>승률</span>
+                    <strong id="metric-win-rate">-</strong>
+                </article>
+                <article class="metric-card">
+                    <span>총손익</span>
+                    <strong id="metric-pnl">-</strong>
+                </article>
+                <article class="metric-card">
+                    <span>수수료</span>
+                    <strong id="metric-fee">-</strong>
+                </article>
+                <article class="metric-card">
+                    <span>MDD</span>
+                    <strong id="metric-mdd">-</strong>
+                </article>
+            </div>
+        </section>
+
+        <section class="chart-panel" aria-labelledby="price-chart-title">
+            <div class="section-heading">
+                <h2 id="price-chart-title">캔들 차트</h2>
+                <div class="legend">
+                    <span><i class="legend-bb-upper"></i>BB 상단</span>
+                    <span><i class="legend-bb-basis"></i>BB 중심</span>
+                    <span><i class="legend-bb-lower"></i>BB 하단</span>
+                    <span><i class="legend-st"></i>SuperTrend</span>
+                    <span><i class="legend-marker legend-be-pro"></i>손절 승격</span>
+                    <span><i class="legend-marker legend-st-exit"></i>ST 청산</span>
+                </div>
+            </div>
+            <div id="price-chart" class="chart-box">
+                <div class="chart-placeholder">실행 결과가 없습니다.</div>
+            </div>
+        </section>
+
+        <section class="chart-panel" aria-labelledby="equity-chart-title">
+            <div class="section-heading">
+                <h2 id="equity-chart-title">시간별 자산 변화</h2>
+                <span id="equity-count">-</span>
+            </div>
+            <div id="equity-chart" class="chart-box equity-chart-box">
+                <div class="chart-placeholder">실행 결과가 없습니다.</div>
+            </div>
+        </section>
+
+        <section class="table-panel" aria-labelledby="trades-title">
+            <div class="section-heading">
+                <h2 id="trades-title">거래 내역</h2>
+                <span id="trade-count">-</span>
+            </div>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>방향</th>
+                        <th>진입 시간</th>
+                        <th>진입가</th>
+                        <th>수량</th>
+                        <th>진입 수수료</th>
+                        <th>청산 수</th>
+                        <th>총손익</th>
+                        <th>총수수료</th>
+                        <th>순손익</th>
+                        <th>청산 후 잔고</th>
+                    </tr>
+                    </thead>
+                    <tbody id="trades-body">
+                    <tr><td colspan="11" class="empty-table">실행 결과가 없습니다.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="section-heading sub-heading">
+                <h3>분할 청산 내역</h3>
+                <span id="exit-count">-</span>
+            </div>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>거래 #</th>
+                        <th>청산 시간</th>
+                        <th>청산 사유</th>
+                        <th>청산가</th>
+                        <th>수량</th>
+                        <th>손익</th>
+                        <th>수수료</th>
+                        <th>실현손익</th>
+                    </tr>
+                    </thead>
+                    <tbody id="exits-body">
+                    <tr><td colspan="8" class="empty-table">실행 결과가 없습니다.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="error-panel" class="error-panel" aria-live="polite" hidden>
+            <div class="section-heading">
+                <h2>오류 메시지</h2>
+                <span id="error-status">-</span>
+            </div>
+            <div id="error-body"></div>
+        </section>
+    </section>
+</main>
+</body>
+</html>
