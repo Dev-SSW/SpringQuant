@@ -1,283 +1,291 @@
 # SpringQuant
 
-SpringQuant는 암호화폐 선물 캔들 데이터를 기반으로 매매 전략을 검증하는 Spring Boot 백테스트 프로젝트입니다.
-실제 주문을 전송하거나 자동 매매를 수행하는 서비스가 아니라, 전략 조건과 리스크 관리 설정을 입력하면 과거 캔들 기준의 거래 결과를 계산하고 화면에서 확인할 수 있도록 만든 백테스트용 애플리케이션입니다.
+SpringQuant는 암호화폐 선물의 과거 캔들 데이터를 기반으로 매매 전략과 리스크 관리 규칙을 검증하는 Spring Boot 백테스트 애플리케이션입니다.
 
-## 프로젝트 목적
+전략 조건, 수수료, 슬리피지, 레버리지 등을 입력하면 가상 거래를 실행하고, REST API와 웹 화면에서 거래 내역 및 성과 지표를 확인할 수 있습니다.
 
-- SuperTrend와 Bollinger Band 기반 진입 조건을 백테스트합니다.
-- 수수료, 슬리피지, 레버리지, 증거금 사용 비율을 반영해 거래 결과를 계산합니다.
-- 손절, 분할 익절, 강제청산, 손절가 승격 같은 리스크 관리 규칙을 도메인 로직으로 분리합니다.
-- REST API, 입력값 검증, 예외 응답, 테스트 코드를 갖춘 백엔드 포트폴리오 프로젝트로 정리합니다.
+## 목차
+
+- [주요 기능](#주요-기능)
+- [기술 스택](#기술-스택)
+- [아키텍처](#아키텍처)
+- [도메인 모델](#도메인-모델)
+- [백테스트 흐름](#백테스트-흐름)
+- [실행 방법](#실행-방법)
+- [API 사용 예시](#api-사용-예시)
+- [테스트](#테스트)
+
+## 주요 기능
+
+| 기능 | 내용 |
+| --- | --- |
+| 시장 데이터 조회 | Binance Futures Kline API에서 캔들을 페이지 단위로 조회하고, 아직 완료되지 않은 캔들 제외 |
+| 전략 실행 | Bollinger Band와 SuperTrend 계산, 추세 전환·중심선 반등·밴드 접근 기반 진입 조건 지원 |
+| 가상 체결 | 이전 캔들로 신호를 판단하고 다음 캔들 시가에 수수료·슬리피지·레버리지를 반영하여 체결 |
+| 리스크 관리 | 손절, 단계별 분할 익절, 유지증거금 기준 강제청산, 익절 이후 손절가 승격 |
+| 결과 분석 | 수익률, 승률, 수수료, 최대 낙폭(MDD), 거래·청산 내역, 이벤트 및 자산 곡선 집계 |
+| 결과 시각화 | 웹 화면에서 캔들·지표·매매 마커·자산 곡선과 거래 내역 확인 |
 
 ## 기술 스택
 
 | 구분 | 사용 기술 |
 | --- | --- |
-| Language | Java 21 |
-| Framework | Spring Boot 4.1.0 |
-| Build | Gradle Wrapper |
-| API | Spring Web MVC, Validation |
-| HTTP Client | Spring RestClient |
-| API 문서 | springdoc-openapi |
-| Test | JUnit 5, Spring Boot Test |
-| Frontend | Static HTML/CSS/JavaScript, lightweight-charts |
+| 언어 | Java 21 |
+| 프레임워크 | Spring Boot 4.1.0 |
+| 빌드 | Gradle Wrapper |
+| API | Spring Web MVC, Jakarta Bean Validation |
+| HTTP 클라이언트 | Spring RestClient |
+| API 문서 | springdoc-openapi, Swagger UI |
+| 테스트 | JUnit Jupiter, Spring Boot Test, Mockito, MockMvc, MockRestServiceServer |
+| 화면 | HTML, CSS, JavaScript, lightweight-charts |
 
-## 주요 기능
+## 아키텍처
 
-### 백테스트 실행
+<p align="center">
+  <a href="docs/images/springquant-architecture.png">
+    <img src="docs/images/springquant-architecture.png" alt="SpringQuant 아키텍처" width="800">
+  </a>
+</p>
 
-- Binance Futures Kline API에서 OHLC 캔들 데이터를 조회합니다.
-- 조회한 캔들을 시간순으로 순회하며 신호 판단과 체결을 분리합니다.
-- 이전에 완료된 캔들로 진입/청산 신호를 판단하고, 다음 캔들의 시가 기준으로 체결합니다.
-- 테스트 종료 시점에 포지션이 남아 있으면 마지막 캔들의 종가로 종료합니다.
+SpringQuant는 REST API 계층과 백테스트 도메인 계산 로직을 분리한 Spring Boot 애플리케이션입니다.
 
-### 전략 지표
+- **BacktestController**: 백테스트 요청 수신, 입력값 검증 및 응답 처리
+- **BacktestService**: 시장 데이터 조회, 백테스트 실행 및 차트 응답 데이터 생성
+- **MarketDataClient**: 시장 데이터 조회 인터페이스로, Binance Futures API 등 데이터 소스 교체 가능
+- **BacktestEngine**: 캔들 기반 전략 실행 및 가상 포지션 관리
+- **PositionRiskProcessor**: 손절, 강제청산, 분할 익절 등 리스크 관리
+- **BacktestResult**: 거래 내역, 수익률, 승률, MDD 및 자산 곡선 집계
 
-- Bollinger Band
-  - 이동평균, 표준편차, 상단선, 중심선, 하단선, 밴드폭을 계산합니다.
-- SuperTrend
-  - True Range, Wilder Moving Average, ATR 기반으로 추세 방향과 전환 신호를 계산합니다.
-- 지원 진입 모드
-  - `ST_FLIP`: SuperTrend 전환 신호 진입
-  - `MA_BOUNCE`: SuperTrend 방향과 Bollinger 중심선 반등 조건 진입
-  - `BB_PIERCE`: SuperTrend 방향과 Bollinger 상하단 접근 조건 진입
+현재 별도의 데이터베이스 없이 요청 단위로 백테스트를 수행하며, 계산 결과를 JSON 응답으로 반환합니다.
 
-### 리스크 관리
+### 설계 선택
 
-- 초기 손절가 계산
-- 단계별 분할 익절
-- 익절 이후 손절가 승격
-- 시가 갭 발생 시 손절/청산 안전 처리
-- 유지증거금 기준 강제청산가 계산
-- 청산가가 손절가보다 먼저 도달하는 진입을 거부하는 옵션
-- 동일 SuperTrend 추세에서 1회만 진입하는 옵션
+- **API 처리와 계산 로직 분리**: 엔진이 HTTP 요청·응답 모델에 의존하지 않도록 구성해, 캔들과 설정 객체만으로 도메인 로직을 테스트할 수 있게 했습니다.
+- **시장 데이터 조회 추상화**: 서비스가 `MarketDataClient` 인터페이스에 의존하도록 구성해 데이터 소스 교체와 외부 API 호출을 대체한 테스트가 가능하게 했습니다.
+- **입력 검증과 오류 응답 통일**: Bean Validation과 설정 객체의 생성자에서 입력값을 검증하고, 전역 예외 처리에서 오류 메시지와 필드별 검증 결과를 공통 형식으로 반환합니다.
 
-### 결과 계산
+---
 
-- 최종 자산
-- 총 수익률
-- 총 거래 수
-- 승/패 거래 수
-- 승률
-- 총 손익
-- 총 수수료
-- 순손익
-- MDD
-- 개별 거래 내역
-- 분할 청산 내역
-- 이벤트 로그
-- 시간별 자산 곡선
+## 도메인 모델
 
-### 화면 제공
+<p align="center">
+  <a href="docs/images/springquant-domain-model.png">
+    <img src="docs/images/springquant-domain-model.png" alt="SpringQuant 도메인 모델" width="800">
+  </a>
+</p>
 
-정적 페이지를 통해 백테스트 설정을 입력하고 결과를 확인할 수 있습니다.
+SpringQuant는 영속 데이터베이스를 사용하지 않으므로 ERD 대신 백테스트 실행에 필요한 주요 도메인 객체의 관계를 정리했습니다.
 
-- 캔들 차트
-- Bollinger Band 라인
-- SuperTrend 라인
-- 진입/익절/손절/청산 마커
-- 자산 곡선 차트
-- 거래 내역 및 분할 청산 내역 테이블
-- API 오류 메시지 표시
+### 설정 객체 (Configuration)
+
+- `BacktestConfig`: 초기 자산, 수수료, 레버리지 및 전략 파라미터
+- `RiskManagementConfig`: 손절률, 분할 익절 및 손절가 승격 설정
+- `TakeProfitLevel`: 익절 목표 수익률과 청산 비율
+- `LiquidationConfig`: 유지증거금 및 강제청산 관련 설정
+
+### 실행 객체 (Execution)
+
+- `BacktestEngine`: 캔들 데이터를 순회하며 백테스트 실행
+- `OpenPosition`: 실행 중인 포지션의 상태 관리
+- `PositionRiskProcessor`: 손절, 강제청산 및 분할 익절 처리
+
+### 결과 객체 (Result)
+
+- `BacktestTrade`: 완료된 거래 한 건의 정보
+- `BacktestExit`: 개별 청산 시점, 가격, 수량, 손익 및 사유
+- `BacktestResult`: 전체 거래 결과 및 통계 집계
+
+설정값은 Java `record` 기반 불변 객체로 관리하고, 실행 중 변경되는 포지션 상태는 `OpenPosition`에 한정했습니다. 완료된 거래와 최종 결과도 불변 객체로 반환합니다.
+
+---
 
 ## 백테스트 흐름
 
-```text
-요청 수신
-  -> 입력값 검증
-  -> Binance Futures 캔들 조회
-  -> Bollinger Band / SuperTrend 계산
-  -> 캔들 순회
-      -> 보유 포지션 시가 안전 청산 확인
-      -> SuperTrend 반전 청산 확인
-      -> 신규 진입 조건 확인
-      -> 손절 / 강제청산 / 분할 익절 처리
-      -> 손절가 승격 예약 및 적용
-  -> 거래 결과 집계
-  -> 차트 데이터와 백테스트 결과 반환
+<p align="center">
+  <a href="docs/images/springquant-backtest-flow.png">
+    <img src="docs/images/springquant-backtest-flow.png" alt="SpringQuant 백테스트 흐름" width="800">
+  </a>
+</p>
+
+백테스트는 과거 캔들 데이터를 시간순으로 순회하며 진입, 청산 및 리스크 관리 규칙을 적용합니다.
+
+### 1. 데이터 조회 및 지표 계산
+
+Binance Futures Kline API에서 OHLC 캔들 데이터를 조회하고, Bollinger Band와 SuperTrend를 계산합니다.
+
+### 2. 신호 판단과 체결 시점 분리
+
+완료된 이전 캔들(`i-1`)의 지표로 매매 신호를 판단하고, 다음 캔들(`i`)의 시가를 기준으로 체결합니다.
+
+이를 통해 미래 데이터를 미리 참조하는 **Look-ahead Bias**를 방지합니다.
+
+### 3. 포지션 진입 및 리스크 관리
+
+진입 조건을 충족하면 레버리지, 증거금 사용 비율, 수수료 및 슬리피지를 반영해 가상 포지션을 생성합니다.
+
+보유 포지션에는 다음 규칙을 적용합니다.
+
+- 시가 갭 발생 시 안전 청산
+- SuperTrend 추세 반전 청산
+- 손절 및 유지증거금 기준 강제청산
+- 단계별 분할 익절
+- 익절 이후 손절가 승격 예약 및 다음 캔들 적용
+
+동일 캔들에서 손절과 익절 조건이 모두 충족되는 경우 **강제청산 또는 손절과 같은 불리한 이벤트를 우선 처리**하여 백테스트 결과가 과대평가되지 않도록 했습니다.
+
+### 4. 결과 집계 및 반환
+
+백테스트 종료 시 포지션이 남아 있다면 마지막 캔들의 종가로 청산합니다.
+
+이후 다음 정보를 집계해 차트 데이터와 함께 반환합니다.
+
+- 최종 자산 및 총 수익률
+- 총 거래 수 및 승률
+- 총 손익, 수수료 및 순손익
+- 최대 낙폭(MDD)
+- 거래 내역 및 분할 청산 내역
+- 이벤트 로그 및 시간별 자산 곡선
+
+자산 곡선은 진입 수수료와 청산 시 실현 손익에 따른 잔고 변화를 기록합니다. MDD도 이 잔고 곡선을 기준으로 계산하며, 보유 중인 포지션의 미실현 손익은 포함하지 않습니다.
+
+## 실행 방법
+
+### 요구 사항
+
+- JDK 21
+- 인터넷 연결: 의존성 다운로드, Binance Futures API 조회 및 화면의 차트 라이브러리 로딩에 사용합니다.
+
+### 애플리케이션 실행
+
+프로젝트 루트에서 실행합니다.
+
+```powershell
+.\gradlew.bat bootRun
 ```
 
-백테스트 엔진은 보수적인 결과를 위해 같은 캔들에서 손절과 익절이 모두 가능한 경우 손절 또는 강제청산 같은 불리한 이벤트를 먼저 처리합니다.
+macOS / Linux에서는 다음 명령을 사용합니다.
 
-## API
+```bash
+./gradlew bootRun
+```
 
-### 백테스트 실행
+실행 후 [백테스트 화면](http://localhost:8080)에 접속하여 종목, 기간, 전략 및 리스크 관리 설정을 입력합니다. 기본 포트는 `8080`이며, `SERVER_PORT` 환경 변수로 변경할 수 있습니다.
+
+### Swagger UI
+
+`backtest` 프로필로 실행하면 Swagger UI와 OpenAPI 문서가 활성화됩니다.
+
+```powershell
+.\gradlew.bat bootRun --args='--spring.profiles.active=backtest'
+```
+
+macOS / Linux에서는 `./gradlew bootRun --args='--spring.profiles.active=backtest'`를 사용합니다.
+
+- [Swagger UI](http://localhost:8080/swagger-ui/index.html)
+- [OpenAPI JSON](http://localhost:8080/v3/api-docs)
+
+## API 사용 예시
+
+### 백테스트 실행 요청
 
 ```http
 POST /api/backtests
 Content-Type: application/json
 ```
 
-아래 요청값은 UI 초기 화면의 동작 확인용 예시이며 실제 매매 설정값이 아닙니다.
-종료 시각은 UI가 접속 당일 00:00으로 채우므로, 아래 예시는 2026-10-06 00:00(KST) 기준입니다.
+아래 JSON을 Swagger UI의 요청 본문에 입력해 실행할 수 있습니다. 예시의 시작 시각은 **2024-01-01 00:00 UTC**, 종료 시각은 **2024-02-01 00:00 UTC**입니다.
 
-요청 예시:
+<details>
+<summary>요청 본문 예시 펼치기</summary>
 
 ```json
 {
   "symbol": "BTCUSDT",
   "interval": "1h",
-  "startTimeMs": 1577804400000,
-  "endTimeMs": 1791212400000,
-  "initialBalance": 100,
-  "feeRate": 0,
-  "slippageRate": 0,
-  "leverage": 1,
-  "marginUsageRate": 1.0,
-  "bollingerPeriod": 10,
-  "bollingerMultiplier": 10.0,
+  "startTimeMs": 1704067200000,
+  "endTimeMs": 1706745600000,
+  "initialBalance": 10000,
+  "feeRate": 0.0004,
+  "slippageRate": 0.0002,
+  "leverage": 2,
+  "marginUsageRate": 0.1,
+  "bollingerPeriod": 20,
+  "bollingerMultiplier": 2.0,
   "bollingerWidthMinPercent": 0,
   "superTrendLength": 10,
-  "superTrendFactor": 10.0,
-  "entryMode": "ST_FLIP",
-  "maTolerancePercent": 0,
-  "bbTolerancePercent": 0,
-  "oneEntryPerTrend": false,
+  "superTrendFactor": 3.0,
+  "entryMode": "MA_BOUNCE",
+  "maTolerancePercent": 0.15,
+  "bbTolerancePercent": 0.15,
+  "oneEntryPerTrend": true,
   "riskManagement": {
-    "stopLossPercent": 1.0,
+    "stopLossPercent": 2.0,
     "takeProfitLevels": [
       { "targetPercent": 1.0, "closeRatio": 0.5 },
-      { "targetPercent": 2.0, "closeRatio": 0.25 },
-      { "targetPercent": 3.0, "closeRatio": 0.25 }
+      { "targetPercent": 2.0, "closeRatio": 0.3 },
+      { "targetPercent": 3.0, "closeRatio": 0.2 }
     ],
-    "stopPromotionMode": "NONE"
+    "stopPromotionMode": "BE_AFTER_TP1"
   },
   "liquidation": {
-    "maintenanceMarginRate": 0,
+    "maintenanceMarginRate": 0.005,
     "maintenanceAmount": 0,
-    "rejectEntryIfLiquidationBeforeStop": false,
+    "rejectEntryIfLiquidationBeforeStop": true,
     "stopBufferPercent": 0
   }
 }
 ```
 
-응답은 차트 표시용 `chartPoints`와 통계/거래 내역을 담은 `result`로 구성됩니다.
+</details>
 
-```json
-{
-  "symbol": "BTCUSDT",
-  "interval": "1h",
-  "startTimeMs": 1577804400000,
-  "endTimeMs": 1791212400000,
-  "chartPoints": [],
-  "result": {
-    "initialBalance": 100.0,
-    "finalBalance": 100.0,
-    "totalReturnPercent": 0.0,
-    "totalTrades": 0,
-    "winningTrades": 0,
-    "losingTrades": 0,
-    "winRatePercent": 0.0,
-    "totalGrossPnl": 0.0,
-    "totalFee": 0.0,
-    "totalNetPnl": 0.0,
-    "maxDrawdownPercent": 0.0,
-    "trades": [],
-    "events": [],
-    "equityCurve": []
-  }
-}
-```
+주요 입력값의 단위와 제약은 다음과 같습니다. 전체 요청 모델은 [BacktestRequest](src/main/java/io/github/devssw/springquant/backtest/api/BacktestRequest.java)와 Swagger UI에서 확인할 수 있습니다.
 
-## 실행 방법
+| 항목 | 단위 및 제약 |
+| --- | --- |
+| `startTimeMs`, `endTimeMs` | Unix 밀리초. 시작 시각은 0보다 크고 종료 시각은 시작 시각보다 커야 함 |
+| `feeRate`, `slippageRate`, `maintenanceMarginRate` | 소수 비율. 예: `0.0004`는 `0.04%` |
+| `marginUsageRate`, `closeRatio` | 소수 비율. 예: `0.1`은 `10%` |
+| `stopLossPercent`, `targetPercent` 등 `Percent` 접미사 필드 | 퍼센트 단위. 예: `2.0`은 `2%` |
+| `takeProfitLevels` | 목표 수익률은 오름차순, 청산 비율의 합은 `1.0` |
+| `entryMode` | `ST_FLIP`, `MA_BOUNCE`, `BB_PIERCE` |
+| `stopPromotionMode` | 예시의 `BE_AFTER_TP1`은 1차 익절 후 진입가로 손절가 승격을 예약. 전체 모드는 [StopPromotionMode](src/main/java/io/github/devssw/springquant/backtest/model/StopPromotionMode.java) 참고 |
 
-### 요구 사항
+### 응답
 
-- Java 21
-- 인터넷 연결
-  - 현재 API 실행은 Binance Futures API에서 캔들을 조회합니다.
+성공 시 `200 OK`와 함께 [BacktestResponse](src/main/java/io/github/devssw/springquant/backtest/api/BacktestResponse.java)를 반환합니다.
 
-### 애플리케이션 실행
+| 필드 | 내용 |
+| --- | --- |
+| `symbol`, `interval`, `startTimeMs`, `endTimeMs` | 요청한 종목, 캔들 간격 및 조회 시각 |
+| `chartPoints` | 캔들 OHLC와 Bollinger Band·SuperTrend 지표. 지표 계산에 필요한 캔들이 부족한 초기 구간의 지표값은 `null` |
+| `result` | 초기·최종 자산, 수익률, 거래 수, 승률, 손익, 수수료 및 MDD |
+| `result.trades` | 완료된 거래와 거래별 분할 청산 내역 |
+| `result.events` | 진입·청산·손절가 승격 등의 이벤트 |
+| `result.equityCurve` | 수수료와 실현 손익을 반영한 시간별 잔고 |
 
-```powershell
-.\gradlew.bat bootRun
-```
+요청값 검증 실패, 잘못된 JSON 또는 유효하지 않은 설정 조합은 `400 Bad Request`로 반환합니다. 공통 오류 응답인 [ApiErrorResponse](src/main/java/io/github/devssw/springquant/common/api/ApiErrorResponse.java)는 `timestamp`, `status`, `error`, `message`, `path`, `fieldErrors`를 포함합니다.
 
-실행 후 브라우저에서 아래 주소로 접속합니다.
+## 테스트
 
-```text
-http://localhost:8080
-```
-
-### Swagger UI 실행
-
-기본 프로필에서는 OpenAPI 문서가 비활성화되어 있습니다.
-`backtest` 프로필로 실행하면 Swagger UI를 사용할 수 있습니다.
-
-```powershell
-.\gradlew.bat bootRun --args='--spring.profiles.active=backtest'
-```
-
-```text
-http://localhost:8080/swagger-ui/index.html
-```
-
-### 테스트 실행
+### 실행
 
 ```powershell
 .\gradlew.bat test
 ```
 
-## 프로젝트 구조
+macOS / Linux에서는 `./gradlew test`를 사용합니다. 실행 후 `build/reports/tests/test/index.html`에서 테스트 보고서를 확인할 수 있습니다.
 
-```text
-src/main/java/io/github/devssw/springquant
-|-- backtest
-|   |-- api        # 백테스트 REST API 요청/응답 모델
-|   |-- engine     # 백테스트 실행, 포지션, 체결가, 청산가, 리스크 처리
-|   |-- model      # 백테스트 설정, 진입 모드, 손절/익절 설정
-|   |-- result     # 거래 결과, 이벤트, 자산 곡선, MDD 계산
-|   `-- service    # 시장 데이터 조회와 엔진 실행 조합
-|-- common
-|   `-- api        # 공통 오류 응답과 예외 처리
-|-- indicator
-|   |-- bollingerband
-|   `-- supertrend
-|-- market
-|   `-- candledata # Binance API 클라이언트, CSV 캔들 리더
-`-- strategy       # 전략 결과와 신호 모델
+### 주요 검증 항목
 
-src/main/resources/static
-|-- index.html
-|-- css/backtest.css
-`-- js/backtest.js
-```
+| 대상 | 검증 내용 | 테스트 코드 |
+| --- | --- | --- |
+| 백테스트 엔진 | 추세 전환 청산, 부분 익절 이후 잔여 수량 청산, 시가 갭 손절 우선 처리, 슬리피지 반영 | [BacktestEngineTest](src/test/java/io/github/devssw/springquant/backtest/engine/BacktestEngineTest.java) |
+| 리스크 처리 | 같은 캔들에서 손절·강제청산과 익절에 모두 도달할 때 불리한 이벤트 우선 처리 | [PositionRiskProcessorTest](src/test/java/io/github/devssw/springquant/backtest/engine/PositionRiskProcessorTest.java) |
+| 손절가 승격 | 익절 시 승격 예약, 다음 캔들에서 적용, 시가가 승격가를 침범하면 보류 | [StopPromotionProcessorTest](src/test/java/io/github/devssw/springquant/backtest/engine/StopPromotionProcessorTest.java) |
+| 결과 계산 | 수수료·부분 청산을 반영한 자산 곡선, 동일 시각의 잔고 변화, 최대 낙폭 계산 | [EquityCurveCalculatorTest](src/test/java/io/github/devssw/springquant/backtest/result/EquityCurveCalculatorTest.java), [DrawdownCalculatorTest](src/test/java/io/github/devssw/springquant/backtest/result/DrawdownCalculatorTest.java) |
+| 지표 계산 | Bollinger Band·SuperTrend 계산, 초기 계산 불가 구간과 잘못된 파라미터 처리 | [BollingerBandCalculatorTest](src/test/java/io/github/devssw/springquant/indicator/bollingerband/BollingerBandCalculatorTest.java), [SuperTrendCalculatorTest](src/test/java/io/github/devssw/springquant/indicator/supertrend/SuperTrendCalculatorTest.java) |
+| 시장 데이터 | 외부 API 응답의 캔들 변환, 미완료 캔들 제외, 조회 조건 검증 | [BinanceFuturesMarketDataClientTest](src/test/java/io/github/devssw/springquant/market/candledata/BinanceFuturesMarketDataClientTest.java) |
+| 서비스 | 시장 데이터 조회와 엔진 실행 조합, 빈 조회 결과와 누락된 설정 처리 | [BacktestServiceTest](src/test/java/io/github/devssw/springquant/backtest/service/BacktestServiceTest.java) |
+| REST API | 정상 응답, 필수값 누락, 잘못된 JSON, 수수료율 범위 위반 및 공통 오류 응답 | [BacktestControllerTest](src/test/java/io/github/devssw/springquant/backtest/api/BacktestControllerTest.java) |
 
-## 테스트 구성
-
-현재 테스트 코드는 주요 도메인 계산과 API 계층을 중심으로 구성되어 있습니다.
-
-- 백테스트 엔진 동작 테스트
-- 체결가 계산 테스트
-- 포지션 진입 검증 테스트
-- 손절, 익절, 강제청산 처리 테스트
-- 손절가 승격 처리 테스트
-- 결과 집계, 이벤트, 자산 곡선, MDD 계산 테스트
-- Bollinger Band, SuperTrend, ATR 관련 지표 계산 테스트
-- Binance Futures API 클라이언트 테스트
-- 백테스트 컨트롤러 및 서비스 테스트
-
-## 현재 구현 범위
-
-이 프로젝트는 백테스트 검증에 집중한 프로젝트입니다. 따라서 현재 범위에는 아래 기능이 포함되어 있지 않습니다.
-
-- 실거래 주문 전송
-- 거래소 API Key 기반 계정 연동
-- DB 저장
-- 로그인/회원 관리
-- 알림 발송
-- 스케줄러 기반 자동 실행
-- 운영 환경용 성능 최적화
-- 대규모 백테스트 작업 큐
-
-결과 데이터는 현재 요청에 대한 응답으로 반환되며, 별도의 영속 저장소에 저장하지 않습니다.
-
-## 구현 포인트
-
-- 백테스트 엔진을 API 계층과 분리해 도메인 로직 중심으로 테스트할 수 있게 구성했습니다.
-- 시장 데이터 조회는 `MarketDataClient` 인터페이스 뒤에 두어 다른 거래소나 CSV 기반 데이터 소스로 교체할 수 있게 했습니다.
-- Java record와 불변 리스트 복사를 사용해 결과 객체의 의도치 않은 변경을 줄였습니다.
-- 입력값 검증과 전역 예외 처리를 통해 API 오류 응답 형식을 통일했습니다.
-- 손절, 익절, 청산, 손절가 승격처럼 상태 변화가 많은 로직을 작은 클래스로 분리했습니다.
-- 정적 화면은 백엔드 결과를 직접 확인하기 위한 도구로 제공하며, 별도의 프론트엔드 빌드 환경 없이 실행됩니다.
+서비스 테스트는 Mockito로 의존 객체를 대체하고, API 테스트는 MockMvc로 요청·응답을 검증합니다. 시장 데이터 클라이언트 테스트는 MockRestServiceServer로 외부 HTTP 응답을 재현하므로 실제 Binance API 호출 없이 실행됩니다.
